@@ -682,6 +682,7 @@ Respond in a supervisor-style reflective tone, grounded in Gestalt field theory.
 """
 
 
+
     
 # -------------------------------
 # OpenAI call helpers
