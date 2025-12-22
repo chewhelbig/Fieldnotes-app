@@ -644,8 +644,13 @@ def build_reflection_prompt(
 ) -> str:
     intensity_instructions = REFLECTION_INTENSITY_INSTRUCTIONS.get(
         intensity,
-        REFLECTION_INTENSITY_INSTRUCTIONS["Medium"],
-    )
+        REFLECTION_INTENSITY_INSTRUCTIONS = {
+            "Basic": "Keep the reflection brief and gentle...",
+            "Medium": "Offer a fuller reflection with balanced depth and clarity...",
+            "Deep": "Offer a fuller reflection with rich but concise descriptions...",
+            "Very deep": "Provide a more extended reflection...",
+        }
+
 
     return f"""
 You are helping the therapist reflect on their clinical work.
