@@ -641,46 +641,6 @@ def call_openai(combined_narrative: str, client_name: str, output_mode: str) -> 
         st.caption(f"Technical details: {e}")
         return "Error: The AI could not generate output. Please try again."
 
-Mode: {output_mode}
-
-If mode is "Short":
-- Return ONLY sections (1) CLEAN NARRATIVE and (2) a brief GESTALT-STYLE SOAP NOTE.
-- Keep SOAP relatively concise.
-
-If mode is "Full":
-- Return all sections as described in the system prompt:
-  CLEAN NARRATIVE, full GESTALT-STYLE SOAP NOTE, SUPERVISOR-STYLE QUESTIONS,
-  GESTALT CONTACT CYCLE ROADMAP table, and UNFINISHED BUSINESS.
-
-Therapist's client name (for context only): {client_name or "Not specified"}
-
-Therapist's raw narrative of the session (informal, possibly messy):
-
-\"\"\"{narrative}\"\"\"
-
-Now produce the output according to the selected mode, with clear Markdown headings for each section you include.
-"""
-
-    try:
-        # 🔒 Gate AI usage here
-        client = get_openai_client_or_none()
-        if client is None:
-            st.error("Please enter your OpenAI API key in the sidebar to use AI features.")
-            st.stop()
-
-        response = client.chat.completions.create(
-            model=OPENAI_MODEL_NOTES,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        st.error("⚠️ There was a problem contacting the AI model.")
-        st.caption(f"Technical details: {e}")
-        return "Error: The AI could not generate output. Please try again."
-
 
 # ---------- OpenAI call for reflection engine ----------
 def call_reflection_engine(
@@ -718,28 +678,6 @@ def call_reflection_engine(
         st.error("⚠️ There was a problem contacting the AI model.")
         st.caption(f"Technical details: {e}")
         return "Error: The AI could not generate reflection output. Please try again."
-
-    intensity_instructions = REFLECTION_INTENSITY_INSTRUCTIONS.get(
-        intensity, REFLECTION_INTENSITY_INSTRUCTIONS["Deep"]
-    )
-
-    user_prompt = f"""
-You are helping the therapist reflect on their own process in relation to one client.
-
-Client name (for context only): {client_name or "Unknown client"}.
-
-Below is:
-1) The therapist's raw narrative of the session (with possible contextual info).
-2) The structured notes that were generated (clean narrative, SOAP, etc.).
-
-First, read the REFLECTION SYSTEM PROMPT (your role and style).
-Second, pay attention to the reflection intensity:
-
-Reflection intensity: {intensity}
-Instructions for depth:
-{intensity_instructions}
-
-Then produce a supervision-style reflection following the structure in the REFLECTION SYSTEM PROMPT.
 
 ----------------
 (1) RAW NARRATIVE
