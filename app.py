@@ -644,7 +644,7 @@ def build_reflection_prompt(
 ) -> str:
     intensity_instructions = REFLECTION_INTENSITY_INSTRUCTIONS.get(
         intensity,
-        REFLECTION_INTENSITY_INSTRUCTIONS["Medium"],
+        REFLECTION_INTENSITY_INSTRUCTIONS["Medium"]
     )
 
     return f"""
