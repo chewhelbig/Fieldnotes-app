@@ -611,30 +611,13 @@ def main():
     )
 
     st.markdown("#### Draft safety")
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.download_button(
-            "⬇️ Download draft (txt)",
-            data=narrative or "",
-            file_name="fieldnotes_draft.txt",
-            mime="text/plain",
-            help="If the page refreshes, you can upload this draft back in.",
-        )
-    
-    with col2:
-        uploaded = st.file_uploader(
-            "⬆️ Upload draft (txt)",
-            type=["txt"],
-            label_visibility="collapsed",
-        )
-        if uploaded is not None:
-            st.session_state["narrative_text"] = uploaded.read().decode("utf-8", errors="replace")
-            st.success("Draft restored into the narrative box.")
-    
-    
-
-
+    st.download_button(
+        "⬇️ Download draft (txt)",
+        data=(narrative or ""),
+        file_name="fieldnotes_draft.txt",
+        mime="text/plain",
+        help="Download a copy of what you typed so far. Useful if the page refreshes or disconnects.",
+    )
     
     notes_text = None
     reflection_text = None
