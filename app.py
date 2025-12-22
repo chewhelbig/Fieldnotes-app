@@ -714,6 +714,12 @@ Then produce a supervision-style reflection following the structure in the REFLE
 """
 
     try:
+        # 🔒 Gate AI usage here
+        client = get_openai_client_or_none()
+        if client is None:
+            st.error("Please enter your OpenAI API key in the sidebar to use AI features.")
+            st.stop()
+    
         response = client.chat.completions.create(
             model=OPENAI_MODEL_REFLECTION,
             messages=[
