@@ -11,8 +11,7 @@ from fpdf import FPDF
 import zipfile
 
 
-# ----sidebar open AI-------
-
+# ---------- Sidebar OpenAI key UI (Option A) ----------
 def sidebar_openai_key_ui() -> None:
     """Show OpenAI key input in sidebar; store it only in this session."""
     if "user_openai_key" not in st.session_state:
@@ -25,8 +24,9 @@ def sidebar_openai_key_ui() -> None:
             type="password",
             key="user_openai_key",
             placeholder="sk-...",
-            help="Stored only in this browser session. Not saved to disk."
+            help="Stored only in this browser session. Not saved to disk.",
         )
+
         col1, col2 = st.columns([1, 1])
         with col1:
             if st.button("Clear key"):
@@ -35,12 +35,14 @@ def sidebar_openai_key_ui() -> None:
         with col2:
             st.caption("✅ Ready" if st.session_state.get("user_openai_key") else "Enter key")
 
+
 def get_openai_client_or_none():
     """Option A: return client if key exists, else None."""
     key = (st.session_state.get("user_openai_key") or "").strip()
     if not key:
         return None
     return OpenAI(api_key=key)
+
 
 # -------------------------------
 # App configuration constants
@@ -614,15 +616,31 @@ REFLECTION_INTENSITY_INSTRUCTIONS = {
 # -------------------------------
 # OpenAI call helpers
 # -------------------------------
-def call_openai(narrative: str, client_name: str, output_mode: str) -> str:
-    """
-    Send the narrative, client name and output mode to OpenAI
-    and return the structured text.
-    """
-    if not narrative.strip():
-        return "Please enter a session narrative first."
+# ---------- OpenAI call for structured notes ----------
+def call_openai(combined_narrative: str, client_name: str, output_mode: str) -> str:
+    user_prompt = build_prompt(combined_narrative, client_name, output_mode)
 
-    user_prompt = f"""
+    try:
+        # 🔒 Gate AI usage here
+        client = get_openai_client_or_none()
+        if client is None:
+            st.error("Please enter your OpenAI API key in the sidebar to use AI features.")
+            st.stop()
+
+        response = client.chat.completions.create(
+            model=OPENAI_MODEL_NOTES,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+        return response.choices[0].message.content
+
+    except Exception as e:
+        st.error("⚠️ There was a problem contacting the AI model.")
+        st.caption(f"Technical details: {e}")
+        return "Error: The AI could not generate output. Please try again."
+
 Mode: {output_mode}
 
 If mode is "Short":
@@ -664,19 +682,42 @@ Now produce the output according to the selected mode, with clear Markdown headi
         return "Error: The AI could not generate output. Please try again."
 
 
+# ---------- OpenAI call for reflection engine ----------
 def call_reflection_engine(
     narrative: str,
     ai_output: str,
     client_name: str,
-    intensity: str = "Deep",
+    intensity: str,
 ) -> str:
-    """
-    Use the raw narrative + the AI-structured output
-    to generate a therapist reflection / supervision view.
-    """
+    user_prompt = build_reflection_prompt(
+        narrative=narrative,
+        ai_output=ai_output,
+        client_name=client_name,
+        intensity=intensity,
+    )
 
-    if not narrative.strip() and not ai_output.strip():
-        return "No material to reflect on yet."
+    try:
+        # 🔒 Gate AI usage here
+        client = get_openai_client_or_none()
+        if client is None:
+            st.error("Please enter your OpenAI API key in the sidebar to use AI features.")
+            st.stop()
+
+        response = client.chat.completions.create(
+            model=OPENAI_MODEL_REFLECTION,
+            messages=[
+                {"role": "system", "content": REFLECTION_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.4,
+            max_tokens=MAX_TOKENS_REFLECTION,
+        )
+        return response.choices[0].message.content.strip()
+
+    except Exception as e:
+        st.error("⚠️ There was a problem contacting the AI model.")
+        st.caption(f"Technical details: {e}")
+        return "Error: The AI could not generate reflection output. Please try again."
 
     intensity_instructions = REFLECTION_INTENSITY_INSTRUCTIONS.get(
         intensity, REFLECTION_INTENSITY_INSTRUCTIONS["Deep"]
