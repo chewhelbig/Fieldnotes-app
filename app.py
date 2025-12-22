@@ -47,6 +47,14 @@ def sidebar_openai_key_ui() -> None:
             st.caption("Enter key")
 
 
+def get_openai_client_or_none():
+    """Option A: return client if key exists AND user confirmed it, else None."""
+    key = (st.session_state.get("user_openai_key") or "").strip()
+    if not key or not st.session_state.get("openai_key_confirmed"):
+        return None
+    return OpenAI(api_key=key)
+
+
 
 # -------------------------------
 # App configuration constants
