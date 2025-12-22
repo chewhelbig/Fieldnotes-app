@@ -10,8 +10,6 @@ from openai import OpenAI
 from fpdf import FPDF
 import zipfile
 
-import streamlit as st
-from openai import OpenAI
 
 # ----sidebar open AI-------
 
