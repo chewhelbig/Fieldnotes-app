@@ -650,6 +650,12 @@ Now produce the output according to the selected mode, with clear Markdown headi
             st.error("Please enter your OpenAI API key in the sidebar to use AI features.")
             st.stop()
 
+        client = get_openai_client_or_none()
+        if client is None:
+            st.error("Please enter your OpenAI API key in the sidebar to use AI features.")
+            st.stop()
+
+
         response = client.chat.completions.create(
             model=OPENAI_MODEL_NOTES,
             messages=[
