@@ -33,7 +33,7 @@ def sidebar_openai_key_ui() -> None:
                 st.session_state["user_openai_key"] = ""
                 st.rerun()
         with col2:
-            st.caption("✅ Ready" if st.session_state.user_openai_key else "Enter key")
+            st.caption("✅ Ready" if st.session_state.get("user_openai_key") else "Enter key")
 
 def get_openai_client_or_none():
     """Option A: return client if key exists, else None."""
