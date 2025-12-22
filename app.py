@@ -17,6 +17,10 @@ def sidebar_openai_key_ui() -> None:
     if "user_openai_key" not in st.session_state:
         st.session_state["user_openai_key"] = ""
 
+    # NEW: track whether user has explicitly "entered" the key
+    if "openai_key_confirmed" not in st.session_state:
+        st.session_state["openai_key_confirmed"] = False
+
     with st.sidebar:
         st.markdown("### 🔑 OpenAI API key")
         st.text_input(
@@ -27,21 +31,21 @@ def sidebar_openai_key_ui() -> None:
             help="Stored only in this browser session. Not saved to disk.",
         )
 
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            if st.button("Clear key"):
-                st.session_state["user_openai_key"] = ""
-                st.rerun()
-        with col2:
-            st.caption("✅ Ready" if st.session_state.get("user_openai_key") else "Enter key")
+        if st.button("Enter key"):
+            key = (st.session_state.get("user_openai_key") or "").strip()
+            if not key:
+                st.session_state["openai_key_confirmed"] = False
+                st.warning("Please paste your OpenAI API key first.")
+            else:
+                st.session_state["openai_key_confirmed"] = True
+                st.success("✅ Key saved for this session.")
 
+        # Status text
+        if st.session_state.get("openai_key_confirmed"):
+            st.caption("✅ Ready")
+        else:
+            st.caption("Enter key")
 
-def get_openai_client_or_none():
-    """Option A: return client if key exists, else None."""
-    key = (st.session_state.get("user_openai_key") or "").strip()
-    if not key:
-        return None
-    return OpenAI(api_key=key)
 
 
 # -------------------------------
