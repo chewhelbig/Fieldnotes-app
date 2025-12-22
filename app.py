@@ -612,7 +612,59 @@ REFLECTION_INTENSITY_INSTRUCTIONS = {
     "Very deep": "Provide a more extended reflection, staying phenomenological but allowing more nuance and layered hypotheses. Imagine supporting a written supervision process or journal entry.",
 }
 
+# -----build prompt --------
+def build_prompt(narrative: str, client_name: str, output_mode: str) -> str:
+    return f"""
+Mode: {output_mode}
 
+If mode is "Short":
+- Return ONLY sections (1) CLEAN NARRATIVE and (2) a brief GESTALT-STYLE SOAP NOTE.
+- Keep SOAP relatively concise.
+
+If mode is "Full":
+- Return all sections as described in the system prompt:
+  CLEAN NARRATIVE, full GESTALT-STYLE SOAP NOTE, SUPERVISOR-STYLE QUESTIONS,
+  GESTALT CONTACT CYCLE ROADMAP table, and UNFINISHED BUSINESS.
+
+Therapist's client name (for context only): {client_name or "Not specified"}
+
+Therapist's raw narrative of the session (informal, possibly messy):
+
+\"\"\"{narrative}\"\"\"
+
+Now produce the output according to the selected mode, with clear Markdown headings for each section you include.
+"""
+
+# ------- reflections prompt ------
+def build_reflection_prompt(
+    narrative: str,
+    ai_output: str,
+    client_name: str,
+    intensity: str,
+) -> str:
+    intensity_instructions = REFLECTION_INTENSITY_INSTRUCTIONS.get(
+        intensity,
+        REFLECTION_INTENSITY_INSTRUCTIONS["Medium"],
+    )
+
+    return f"""
+You are helping the therapist reflect on their clinical work.
+
+Client (context only): {client_name or "Not specified"}
+
+Therapist's raw narrative:
+\"\"\"{narrative}\"\"\"
+
+AI-generated structured notes:
+\"\"\"{ai_output}\"\"\"
+
+Reflection depth: {intensity}
+
+{intensity_instructions}
+
+Respond in a supervisor-style reflective tone, grounded in Gestalt field theory.
+"""
+    
 # -------------------------------
 # OpenAI call helpers
 # -------------------------------
