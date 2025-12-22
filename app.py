@@ -16,7 +16,7 @@ import zipfile
 def sidebar_openai_key_ui() -> None:
     """Show OpenAI key input in sidebar; store it only in this session."""
     if "user_openai_key" not in st.session_state:
-        st.session_state.user_openai_key = ""
+        st.session_state["user_openai_key"] = ""
 
     with st.sidebar:
         st.markdown("### 🔑 OpenAI API key")
@@ -30,7 +30,7 @@ def sidebar_openai_key_ui() -> None:
         col1, col2 = st.columns([1, 1])
         with col1:
             if st.button("Clear key"):
-                st.session_state.user_openai_key = ""
+                st.session_state["user_openai_key"] = ""
                 st.rerun()
         with col2:
             st.caption("✅ Ready" if st.session_state.user_openai_key else "Enter key")
