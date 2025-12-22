@@ -644,23 +644,22 @@ def build_reflection_prompt(
 ) -> str:
     intensity_instructions = REFLECTION_INTENSITY_INSTRUCTIONS.get(
         intensity,
-        REFLECTION_INTENSITY_INSTRUCTIONS = {
-            "Basic": "Keep the reflection brief and gentle...",
-            "Medium": "Offer a fuller reflection with balanced depth and clarity...",
-            "Deep": "Offer a fuller reflection with rich but concise descriptions...",
-            "Very deep": "Provide a more extended reflection...",
-        }
-
+        REFLECTION_INTENSITY_INSTRUCTIONS["Medium"],
+    )
 
     return f"""
 You are helping the therapist reflect on their clinical work.
 
 Client (context only): {client_name or "Not specified"}
 
-Therapist's raw narrative:
+----------------
+(1) RAW NARRATIVE
+----------------
 \"\"\"{narrative}\"\"\"
 
-AI-generated structured notes:
+-----------------------
+(2) STRUCTURED AI NOTES
+-----------------------
 \"\"\"{ai_output}\"\"\"
 
 Reflection depth: {intensity}
@@ -669,6 +668,7 @@ Reflection depth: {intensity}
 
 Respond in a supervisor-style reflective tone, grounded in Gestalt field theory.
 """
+
     
 # -------------------------------
 # OpenAI call helpers
