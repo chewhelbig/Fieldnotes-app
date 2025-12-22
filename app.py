@@ -10,6 +10,39 @@ from openai import OpenAI
 from fpdf import FPDF
 import zipfile
 
+import streamlit as st
+from openai import OpenAI
+
+# ----sidebar open AI-------
+
+def sidebar_openai_key_ui() -> None:
+    """Show OpenAI key input in sidebar; store it only in this session."""
+    if "user_openai_key" not in st.session_state:
+        st.session_state.user_openai_key = ""
+
+    with st.sidebar:
+        st.markdown("### 🔑 OpenAI API key")
+        st.text_input(
+            "Enter your OpenAI API key",
+            type="password",
+            key="user_openai_key",
+            placeholder="sk-...",
+            help="Stored only in this browser session. Not saved to disk."
+        )
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if st.button("Clear key"):
+                st.session_state.user_openai_key = ""
+                st.rerun()
+        with col2:
+            st.caption("✅ Ready" if st.session_state.user_openai_key else "Enter key")
+
+def get_openai_client_or_none():
+    """Option A: return client if key exists, else None."""
+    key = (st.session_state.get("user_openai_key") or "").strip()
+    if not key:
+        return None
+    return OpenAI(api_key=key)
 
 # -------------------------------
 # Environment & OpenAI client
@@ -723,6 +756,9 @@ def main():
         page_title="FieldNotes for Therapists",
         layout="centered"
     )
+
+    # ✅ Add this line here (early, before your own sidebar block)
+    sidebar_openai_key_ui()
 
     # Ensure session root is initialised
     if "SESSIONS_ROOT" not in st.session_state:
