@@ -736,40 +736,6 @@ def call_reflection_engine(
         st.caption(f"Technical details: {e}")
         return "Error: The AI could not generate reflection output. Please try again."
 
-----------------
-(1) RAW NARRATIVE
-----------------
-{narrative}
-
------------------------
-(2) STRUCTURED AI NOTES
------------------------
-{ai_output}
-"""
-
-    try:
-        # 🔒 Gate AI usage here
-        client = get_openai_client_or_none()
-        if client is None:
-            st.error("Please enter your OpenAI API key in the sidebar to use AI features.")
-            st.stop()
-    
-        response = client.chat.completions.create(
-            model=OPENAI_MODEL_REFLECTION,
-            messages=[
-                {"role": "system", "content": REFLECTION_SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.4,
-            max_tokens=MAX_TOKENS_REFLECTION,
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        st.error("⚠️ Reflection engine failed.")
-        st.caption(f"Technical details: {e}")
-        return "Reflection could not be generated due to an AI error."
-
-
 def save_reflection_note_to_folder(client_name: str, content: str) -> str:
     """
     Save the therapist reflection to the client's folder
