@@ -1,23 +1,31 @@
 import os
-import json
 import io
+import re
 from datetime import datetime
-import re  # for extracting section A later
 
 import streamlit as st
-from dotenv import load_dotenv
 from openai import OpenAI
 from fpdf import FPDF
-import zipfile
 
 
-# ---------- Sidebar OpenAI key UI (Option A) ----------
+# =========================
+# Hosted / download-only mode
+# =========================
+APP_VERSION = "0.2-hosted-download-only"
+
+OPENAI_MODEL_NOTES = "gpt-4.1-mini"
+OPENAI_MODEL_REFLECTION = "gpt-4.1-mini"
+MAX_TOKENS_REFLECTION = 2300
+
+
+# =========================
+# Sidebar OpenAI key UI
+# =========================
 def sidebar_openai_key_ui() -> None:
-    """Show OpenAI key input in sidebar; store it only in this session."""
+    """Show OpenAI key input in sidebar; store it only in this browser session."""
     if "user_openai_key" not in st.session_state:
         st.session_state["user_openai_key"] = ""
 
-    # NEW: track whether user has explicitly "entered" the key
     if "openai_key_confirmed" not in st.session_state:
         st.session_state["openai_key_confirmed"] = False
 
@@ -40,7 +48,6 @@ def sidebar_openai_key_ui() -> None:
                 st.session_state["openai_key_confirmed"] = True
                 st.success("✅ Key saved for this session.")
 
-        # Status text
         if st.session_state.get("openai_key_confirmed"):
             st.caption("✅ Ready")
         else:
@@ -48,257 +55,27 @@ def sidebar_openai_key_ui() -> None:
 
 
 def get_openai_client_or_none():
-    """Option A: return client if key exists AND user confirmed it, else None."""
+    """Return client if key exists AND user confirmed it, else None."""
     key = (st.session_state.get("user_openai_key") or "").strip()
     if not key or not st.session_state.get("openai_key_confirmed"):
         return None
     return OpenAI(api_key=key)
 
 
-
-# -------------------------------
-# App configuration constants
-# -------------------------------
-OPENAI_MODEL_NOTES = "gpt-4.1-mini"
-OPENAI_MODEL_REFLECTION = "gpt-4.1-mini"
-MAX_TOKENS_REFLECTION = 2300
-
-DEFAULT_SESSIONS_ROOT = "client_sessions"
-CLIENTS_FILE = "clients.json"
-
-APP_VERSION = "0.1"
-
-
-def get_sessions_root() -> str:
-    """
-    Return the current root folder for session files.
-    Uses Streamlit session_state so advanced users can change it.
-    """
-    return st.session_state.get("SESSIONS_ROOT", DEFAULT_SESSIONS_ROOT)
-
-
-# -------------------------------
-# Client list storage (local file)
-# -------------------------------
-def load_clients():
-    if os.path.exists(CLIENTS_FILE):
-        try:
-            with open(CLIENTS_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if isinstance(data, list):
-                return sorted(set(data))
-        except Exception as e:
-            st.warning(f"Could not load clients list: {e}")
-    return []
-
-
-def save_clients(clients):
-    """Save client names to a local JSON file."""
-    try:
-        with open(CLIENTS_FILE, "w", encoding="utf-8") as f:
-            json.dump(sorted(set(clients)), f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
-
-
-# -------------------------------
-# Session note storage (local folders)
-# -------------------------------
-def safe_client_folder_name(name: str) -> str:
-    """Turn client name into a safe folder name without using regex."""
-    if not name or not name.strip():
-        return "unknown_client"
-
-    allowed_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_- "
-    cleaned = "".join(c for c in name.strip() if c in allowed_chars)
-
-    # Replace spaces with underscores
-    cleaned = cleaned.replace(" ", "_")
-
-    return cleaned or "client"
-
-
-def save_session_note_to_folder(client_name: str, content: str) -> str:
-    """
-    Save the generated note into a client-specific folder as plain text (.txt).
-    """
-    safe_name = safe_client_folder_name(client_name)
-    client_dir = os.path.join(get_sessions_root(), safe_name)
-    os.makedirs(client_dir, exist_ok=True)
-
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    filename = f"session_{timestamp}.txt"
-    file_path = os.path.join(client_dir, filename)
-
-    try:
-        with open(file_path, "w", encoding="utf-8") as f_out:
-            f_out.write(content)
-    except Exception:
-        # Fail silently; do not crash if writing fails
-        return file_path
-
-    return file_path
-
-
-def list_client_sessions(client_name: str) -> list[tuple[str, str]]:
-    safe_name = safe_client_folder_name(client_name)
-    client_dir = os.path.join(get_sessions_root(), safe_name)
-    if not os.path.isdir(client_dir):
-        return []
-
-    files = []
-    for fname in os.listdir(client_dir):
-        if fname.endswith(".txt"):
-            full_path = os.path.join(client_dir, fname)
-            files.append((fname, full_path))
-
-    files.sort(key=lambda x: x[0])
-    return files
-
-
-def load_session_content(file_path: str) -> str:
-    """
-    Load raw text from a saved session or reflection file.
-    """
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            return f.read()
-    except Exception as e:
-        return f"Could not load session content.\n\nError: {e}"
-
-
+# =========================
+# Text/PDF helpers
+# =========================
 def remove_markdown_tables(text: str) -> str:
     """Remove any Markdown table (lines starting with '|') from plain text output."""
     lines = text.split("\n")
     cleaned_lines = []
     for line in lines:
         if line.strip().startswith("|"):
-            continue   # skip all table rows
+            continue
         cleaned_lines.append(line)
     return "\n".join(cleaned_lines)
 
 
-# --------------------------------
-# Extract A Section
-# -------------------------------
-def extract_assessment_section(text: str) -> str:
-    """
-    Extract the 'A (Analysis/Assessment)' section from a SOAP note.
-    """
-    lines = text.splitlines()
-    start_idx = None
-
-    # 1. Find the line where the A-section starts
-    for i, line in enumerate(lines):
-        stripped = line.strip()
-        stripped = stripped.lstrip("#>*- ").strip()
-
-        if stripped.startswith("A (") and ("Analysis" in stripped or "Assessment" in stripped):
-            start_idx = i
-            break
-
-    if start_idx is None:
-        return text.strip()
-
-    # 2. Find where the next SOAP section starts (S, O, or P)
-    end_idx = len(lines)
-    for j in range(start_idx + 1, len(lines)):
-        stripped = lines[j].strip()
-        stripped_no_md = stripped.lstrip("#>*- ").strip()
-        if (
-            stripped_no_md.startswith("S (")
-            or stripped_no_md.startswith("O (")
-            or stripped_no_md.startswith("P (")
-        ):
-            end_idx = j
-            break
-
-    section = "\n".join(lines[start_idx:end_idx])
-    return section.strip()
-
-
-def extract_soap_section(text: str) -> str:
-    """
-    Extract ONLY the Gestalt-style SOAP note section from the full AI output.
-    """
-    lines = text.splitlines()
-    start_idx = None
-
-    # 1. Find where the SOAP section starts
-    for i, line in enumerate(lines):
-        stripped = line.strip()
-        stripped = stripped.lstrip("#>*- ").strip()
-        upper = stripped.upper()
-        if "GESTALT-STYLE SOAP NOTE" in upper:
-            start_idx = i
-            break
-
-    # Fallback: if we don't see the SOAP heading, try from "S (Subjective)"
-    if start_idx is None:
-        for i, line in enumerate(lines):
-            stripped = line.strip().lstrip("#>*- ").strip()
-            if stripped.startswith("S (Subjective"):
-                start_idx = i
-                break
-
-    if start_idx is None:
-        return text.strip()
-
-    # 2. Find where SOAP ends (before Supervisor-Style Questions / section 3)
-    end_idx = len(lines)
-    for j in range(start_idx + 1, len(lines)):
-        stripped = lines[j].strip()
-        stripped_no_md = stripped.lstrip("#>*- ").strip()
-        upper = stripped_no_md.upper()
-
-        if ("SUPERVISOR-STYLE QUESTIONS" in upper) or upper.startswith("3) SUPERVISOR"):
-            end_idx = j
-            break
-        if upper.startswith("3) ") and "SUPERVISOR" in upper:
-            end_idx = j
-            break
-
-    section = "\n".join(lines[start_idx:end_idx])
-    return section.strip()
-
-
-def get_client_history_snippet(client_name: str, max_sessions: int = 3) -> str:
-    """
-    Load the last few session files for a client and pull out ONLY the SOAP
-    'A = Assessment' section from each session.
-    """
-    safe_name = safe_client_folder_name(client_name or "Unknown_client")
-    client_folder = os.path.join(get_sessions_root(), safe_name)
-    if not os.path.exists(client_folder):
-        return ""
-
-    files = [
-        f for f in os.listdir(client_folder)
-        if f.startswith("session_") and f.endswith(".txt")
-    ]
-    if not files:
-        return ""
-
-    files.sort(reverse=True)  # latest first
-
-    snippets = []
-    for fname in files[:max_sessions]:
-        path = os.path.join(client_folder, fname)
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                content = f.read()
-            assessment = extract_assessment_section(content)
-            if assessment:
-                snippets.append(f"From {fname} (SOAP – A: Assessment):\n{assessment}")
-        except Exception:
-            continue
-
-    return "\n\n".join(snippets)
-
-
-# -------------------------------
-# Contact cycle table → text helper
-# -------------------------------
 def contact_cycle_table_to_text(table_lines: list[str]) -> str:
     """
     Convert a Markdown contact cycle table into a readable text block
@@ -316,6 +93,7 @@ def contact_cycle_table_to_text(table_lines: list[str]) -> str:
 
     for row in table_lines[1:]:
         row_stripped = row.strip()
+        # skip separator-like rows
         if set(row_stripped.replace("|", "").replace("-", "").strip()) == set():
             continue
 
@@ -338,9 +116,6 @@ def contact_cycle_table_to_text(table_lines: list[str]) -> str:
     return "\n".join(result_lines).strip()
 
 
-# -------------------------------
-# PDF creation helper
-# -------------------------------
 def create_pdf_from_text(content: str) -> bytes:
     """Create a simple, readable PDF from the AI text."""
     safe_content = (
@@ -398,9 +173,21 @@ def create_pdf_from_text(content: str) -> bytes:
     return pdf_bytes
 
 
-# -------------------------------
-# System prompt (the "brain")
-# -------------------------------
+def safe_download_name(label: str) -> str:
+    """Make a safe filename component (no directories)."""
+    label = (label or "").strip()
+    if not label:
+        return "client"
+
+    # Keep alnum, space, underscore, dash only
+    cleaned = "".join(c for c in label if c.isalnum() or c in " _-")
+    cleaned = cleaned.strip().replace(" ", "_")
+    return cleaned or "client"
+
+
+# =========================
+# Prompts (unchanged)
+# =========================
 SYSTEM_PROMPT = """
 You are a clinical note assistant for psychotherapists who work in a relational, Gestalt-oriented way.
 
@@ -624,7 +411,7 @@ REFLECTION_INTENSITY_INSTRUCTIONS = {
     "Very deep": "Provide a more extended reflection, staying phenomenological but allowing more nuance and layered hypotheses. Imagine supporting a written supervision process or journal entry.",
 }
 
-# -----build prompt --------
+
 def build_prompt(narrative: str, client_name: str, output_mode: str) -> str:
     return f"""
 Mode: {output_mode}
@@ -647,7 +434,7 @@ Therapist's raw narrative of the session (informal, possibly messy):
 Now produce the output according to the selected mode, with clear Markdown headings for each section you include.
 """
 
-# ------- reflections prompt ------
+
 def build_reflection_prompt(
     narrative: str,
     ai_output: str,
@@ -656,7 +443,7 @@ def build_reflection_prompt(
 ) -> str:
     intensity_instructions = REFLECTION_INTENSITY_INSTRUCTIONS.get(
         intensity,
-        REFLECTION_INTENSITY_INSTRUCTIONS["Basic"]
+        REFLECTION_INTENSITY_INSTRUCTIONS["Basic"],
     )
 
     return f"""
@@ -682,17 +469,13 @@ Respond in a supervisor-style reflective tone, grounded in Gestalt field theory.
 """
 
 
-
-    
-# -------------------------------
+# =========================
 # OpenAI call helpers
-# -------------------------------
-# ---------- OpenAI call for structured notes ----------
-def call_openai(combined_narrative: str, client_name: str, output_mode: str) -> str:
-    user_prompt = build_prompt(combined_narrative, client_name, output_mode)
+# =========================
+def call_openai(narrative: str, client_name: str, output_mode: str) -> str:
+    user_prompt = build_prompt(narrative, client_name, output_mode)
 
     try:
-        # 🔒 Gate AI usage here
         client = get_openai_client_or_none()
         if client is None:
             st.error("Please enter your OpenAI API key in the sidebar to use AI features.")
@@ -713,7 +496,6 @@ def call_openai(combined_narrative: str, client_name: str, output_mode: str) -> 
         return "Error: The AI could not generate output. Please try again."
 
 
-# ---------- OpenAI call for reflection engine ----------
 def call_reflection_engine(
     narrative: str,
     ai_output: str,
@@ -728,7 +510,6 @@ def call_reflection_engine(
     )
 
     try:
-        # 🔒 Gate AI usage here
         client = get_openai_client_or_none()
         if client is None:
             st.error("Please enter your OpenAI API key in the sidebar to use AI features.")
@@ -750,58 +531,30 @@ def call_reflection_engine(
         st.caption(f"Technical details: {e}")
         return "Error: The AI could not generate reflection output. Please try again."
 
-def save_reflection_note_to_folder(client_name: str, content: str) -> str:
-    """
-    Save the therapist reflection to the client's folder
-    as a separate file, e.g. reflection_YYYY-MM-DD_HH-MM.txt
-    """
-    safe_name = safe_client_folder_name(client_name or "Unknown_client")
-    client_folder = os.path.join(get_sessions_root(), safe_name)
-    os.makedirs(client_folder, exist_ok=True)
 
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    filename = f"reflection_{timestamp}.txt"
-    file_path = os.path.join(client_folder, filename)
-
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(content)
-
-    return file_path
-
-
-# -------------------------------
+# =========================
 # Streamlit app
-# -------------------------------
+# =========================
 def main():
-    st.set_page_config(
-        page_title="FieldNotes for Therapists",
-        layout="centered"
-    )
+    st.set_page_config(page_title="FieldNotes for Therapists", layout="centered")
 
-    # ✅ Add this line here (early, before your own sidebar block)
+    # Sidebar: key input + settings
     sidebar_openai_key_ui()
 
-    # Ensure session root is initialised
-    if "SESSIONS_ROOT" not in st.session_state:
-        st.session_state["SESSIONS_ROOT"] = DEFAULT_SESSIONS_ROOT
-
-    # ---------------- Sidebar ----------------
     with st.sidebar:
         st.header("Settings")
 
-        # Output detail level
         output_mode = st.radio(
             "Output detail level",
             ["Short", "Full"],
             index=1,
-            help="Short = clean narrative + brief SOAP. Full = all sections including questions, contact cycle, unfinished business."
+            help="Short = clean narrative + brief SOAP. Full = all sections including questions, contact cycle, unfinished business.",
         )
 
-        # Reflection settings
         generate_reflection = st.checkbox(
             "Generate therapist reflection / supervision view",
             value=False,
-            help="Uses the session narrative + generated notes to create a supervision-style reflection just for you."
+            help="Uses the session narrative + generated notes to create a supervision-style reflection just for you.",
         )
 
         if generate_reflection:
@@ -814,97 +567,38 @@ def main():
         else:
             reflection_intensity = "Deep"
 
-        # Previous-session history toggle
-        show_history = st.checkbox(
-            "Show previous sessions for this client (SOAP only)",
-            value=False,
-            help="View and optionally delete past notes for this client."
-        )
-
         st.markdown("---")
-        st.subheader("Storage location")
-
-        current_root = st.session_state["SESSIONS_ROOT"]
-        new_root = st.text_input(
-            "Folder for saving all client notes:",
-            value=current_root,
-            help="Choose where your client folders are stored (e.g. an encrypted folder). "
-                 "Existing files are not moved automatically.",
-        )
-
-        if st.button("Update storage folder"):
-            st.session_state["SESSIONS_ROOT"] = new_root
-            st.success(f"Storage root updated to: {new_root}")
-
-        st.caption(f"Active folder: `{get_sessions_root()}`")
+        st.subheader("Hosted mode: download-only")
+        st.caption("No notes are stored on this server. Use Download to save files to your device.")
 
         st.markdown("---")
         st.subheader("About")
         st.caption(f"FieldNotes for Therapists · v{APP_VERSION}")
         st.caption("Created by Nicole Chew-Helbig, Gestalt psychotherapist")
-
         st.caption(
             "These notes are generated to support your clinical thinking and are not a "
             "substitute for your professional judgment or supervision."
         )
 
-    # ---------------- Main content: title & intro ----------------
+    # Main content
     st.title("FieldNotes - Session Companion")
     st.write(
         "FieldNotes is a Gestalt-informed AI companion to help you turn a quick narrative into "
         "clear session notes and supervision material.\n\n"
-        "Paste your session narrative, and you'll receive a cleaned narrative, "
-        "Gestalt-style SOAP note, supervisor-style questions, a contact cycle roadmap, "
-        "and possible unfinished business (in full mode).\n\n"
-        "**No notes are stored in any external database.** The text you enter is sent securely to the OpenAI API to generate notes. "
-        "The app then saves plain-text files only on this computer, in local folders you can see and manage."
+        "**Hosted download-only mode:** This site does **not** store your notes on the server. "
+        "Your text is sent to the OpenAI API to generate output, then displayed here. "
+        "Use the download buttons to save to your own device."
     )
 
-    # ---------------- Client selection ----------------
-    st.markdown("### 🧑‍🤝‍🧑 Client selection")
-
-    clients = load_clients()
-
-    selected_client = st.selectbox(
-        "Select existing client (or leave blank to add new):",
-        [""] + clients,
-        format_func=lambda x: "— none —" if x == "" else x,
-    )
-
-    new_client = st.text_input(
-        "New client name (if this is a new client):",
+    # Client label (not stored)
+    st.markdown("### 🧑‍🤝‍🧑 Client name (typed each time — not stored)")
+    client_name = st.text_input(
+        "Client label for this session:",
         value="",
-        placeholder="e.g. Emma, Couple 03, C-017..."
-    ).strip()
+        placeholder="e.g. Emma, Couple 03, C-017 (avoid full names if possible)",
+    ).strip() or "Unknown client"
 
-    if new_client:
-        client_name = new_client
-        if new_client not in clients:
-            clients.append(new_client)
-            save_clients(clients)
-    elif selected_client:
-        client_name = selected_client
-    else:
-        client_name = "Unknown client"   # safe default
-
-    # ---------------- Styling for history viewer ----------------
-    st.markdown("""
-    <style>
-    .readonly-box {
-        background-color: #f7f7f9;
-        color: #222222;
-        padding: 1rem;
-        border-radius: 8px;
-        border: 1px solid #e1e1e1;
-        font-size: 0.95rem;
-        line-height: 1.45;
-        white-space: pre-wrap;
-        font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-    # ---------------- Session narrative ----------------
+    # Session narrative
     if "narrative_text" not in st.session_state:
         st.session_state["narrative_text"] = ""
 
@@ -913,36 +607,22 @@ def main():
         "Session narrative (write in your own words)",
         key="narrative_text",
         height=280,
-        placeholder="Write your session details here..."
+        placeholder="Write your session details here...",
     )
 
     notes_text = None
     reflection_text = None
 
-    # ---------------- Generate button (above history) ----------------
     if st.button("Generate structured output"):
         if not narrative.strip():
             st.warning("Please enter a session narrative first.")
             st.stop()
 
-        client_history = get_client_history_snippet(client_name, max_sessions=3)
-        if client_history:
-            combined_narrative = f"""PAST SESSION SUMMARIES (Assessment sections only, for context):
-{client_history}
-
-CURRENT SESSION NARRATIVE:
-{narrative}
-"""
-        else:
-            combined_narrative = narrative
+        combined_narrative = narrative  # no history recall in hosted mode
 
         with st.spinner("Generating clinical notes..."):
             notes_text = call_openai(combined_narrative, client_name, output_mode)
 
-        # Save main session notes
-        save_session_note_to_folder(client_name, notes_text)
-
-        # Optional reflection
         if generate_reflection:
             with st.spinner("Generating therapist reflection / supervision view..."):
                 reflection_text = call_reflection_engine(
@@ -951,13 +631,15 @@ CURRENT SESSION NARRATIVE:
                     client_name=client_name,
                     intensity=reflection_intensity,
                 )
-            save_reflection_note_to_folder(client_name, reflection_text)
         else:
             reflection_text = None
 
-        # -------- Tabs: Notes / Reflection --------
+        # Tabs: Notes / Reflection
         st.markdown("---")
         notes_tab, reflection_tab = st.tabs(["Notes", "Reflection"])
+
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
+        safe_name = safe_download_name(client_name)
 
         with notes_tab:
             st.markdown("### 📝 Clinical notes (AI-structured)")
@@ -967,22 +649,17 @@ CURRENT SESSION NARRATIVE:
             )
             st.markdown(notes_text)
 
-            st.success(f"Session notes saved for {client_name}.")
-
             st.caption(
-                "These notes are generated to support your clinical thinking and are not a substitute "
-                "for your professional judgment or supervision."
+                "Reminder: this hosted app does not store notes. "
+                "Download to keep a local copy."
             )
-
-            safe_name = safe_client_folder_name(client_name)
-            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
 
             # TXT download (tables stripped)
             clean_txt = remove_markdown_tables(notes_text)
             st.download_button(
                 label="💾 Download notes as .txt",
                 data=clean_txt,
-                file_name=f"{safe_name}_{timestamp}.txt",
+                file_name=f"{safe_name}_{timestamp}_notes.txt",
                 mime="text/plain",
             )
 
@@ -991,30 +668,9 @@ CURRENT SESSION NARRATIVE:
             st.download_button(
                 label="📄 Download notes as PDF",
                 data=pdf_bytes,
-                file_name=f"{safe_name}_{timestamp}.pdf",
+                file_name=f"{safe_name}_{timestamp}_notes.pdf",
                 mime="application/pdf",
             )
-
-            # ZIP: all notes for this client
-            client_folder = os.path.join(get_sessions_root(), safe_name)
-            if os.path.isdir(client_folder):
-                zip_buffer = io.BytesIO()
-                with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-                    for root, dirs, files in os.walk(client_folder):
-                        for filename in files:
-                            file_path = os.path.join(root, filename)
-                            arcname = os.path.relpath(file_path, client_folder)
-                            zf.write(file_path, arcname)
-                zip_buffer.seek(0)
-
-                st.download_button(
-                    label="📦 Download ALL notes for this client (.zip)",
-                    data=zip_buffer,
-                    file_name=f"{safe_name}_all_notes.zip",
-                    mime="application/zip",
-                )
-            else:
-                st.caption("No folder found yet for this client to export as ZIP.")
 
         with reflection_tab:
             st.markdown("### 🧠 Therapist reflection / supervision view")
@@ -1025,78 +681,27 @@ CURRENT SESSION NARRATIVE:
                     "shame arcs, field dynamics, and possible Gestalt experiments."
                 )
                 st.markdown(reflection_text)
-                st.info("Reflection saved as a separate file in the same client folder.")
+
+                # Reflection downloads
+                st.download_button(
+                    label="💾 Download reflection as .txt",
+                    data=reflection_text,
+                    file_name=f"{safe_name}_{timestamp}_reflection.txt",
+                    mime="text/plain",
+                )
+
+                reflection_pdf = create_pdf_from_text(reflection_text)
+                st.download_button(
+                    label="📄 Download reflection as PDF",
+                    data=reflection_pdf,
+                    file_name=f"{safe_name}_{timestamp}_reflection.pdf",
+                    mime="application/pdf",
+                )
             else:
                 st.write(
                     "No reflection generated for this session. "
                     "Tick the reflection option in the sidebar if you want one next time."
                 )
-
-    # ---------------- Previous-session viewer (SOAP only + delete) ----------------
-    if show_history:
-        st.markdown("### 📚 Previous sessions – SOAP notes")
-
-        sessions = list_client_sessions(client_name)
-        sessions = sessions[-30:]  # last 30 only
-
-        if sessions:
-            labels = []
-            label_to_path = {}
-
-            for fname, path in sessions:
-                label = fname
-                if fname.startswith("session_") and fname.endswith(".txt"):
-                    core = fname[len("session_"):-len(".txt")]
-                    try:
-                        dt = datetime.strptime(core, "%Y-%m-%d_%H-%M")
-                        label = dt.strftime("%Y-%m-%d %H:%M")
-                    except ValueError:
-                        label = fname
-
-                labels.append(label)
-                label_to_path[label] = path
-
-            labels_sorted = list(reversed(labels))
-
-            selected_label = st.selectbox(
-                "Select a past note file to view (session or reflection):",
-                ["— select —"] + labels_sorted,
-            )
-
-            if selected_label != "— select —":
-                selected_path = label_to_path.get(selected_label)
-                if selected_path:
-                    full_text = load_session_content(selected_path)
-                    soap_only = extract_soap_section(full_text)
-
-                    st.markdown(
-                        "<div class='readonly-box'>"
-                        + soap_only.replace("\n", "<br>")
-                        + "</div>",
-                        unsafe_allow_html=True,
-                    )
-
-                    # Delete this file
-                    st.markdown("#### 🗑 Delete this note file")
-                    delete_confirm = st.checkbox(
-                        "Yes, permanently delete this file",
-                        key=f"delete_confirm_{selected_label}",
-                    )
-                    if st.button(
-                        "Delete selected note file",
-                        key=f"delete_button_{selected_label}",
-                    ):
-                        if delete_confirm:
-                            try:
-                                os.remove(selected_path)
-                                st.success("Note file deleted.")
-                                st.experimental_rerun()
-                            except Exception as e:
-                                st.error(f"Could not delete file: {e}")
-                        else:
-                            st.warning("Please tick the confirmation box before deleting.")
-        else:
-            st.caption("No previous notes saved yet for this client.")
 
     st.caption(f"FieldNotes for Therapists · v{APP_VERSION} · Created by Nicole Chew-Helbig")
 
