@@ -117,7 +117,6 @@ def sidebar_openai_key_ui() -> None:
         restored = _localstorage_get(LOCALSTORAGE_KEY_NAME)
         if restored:
             st.session_state["user_openai_key"] = restored
-            st.session_state["openai_key_confirmed"] = True
 
     with st.sidebar:
         st.markdown("### 🔑 OpenAI API key")
