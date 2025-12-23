@@ -26,6 +26,25 @@ LOCALSTORAGE_KEY_NAME = "fieldnotes_openai_api_key_v1"
 
 LOCALSTORAGE_KEY_NAME = "fieldnotes_openai_api_key_v1"
 
+def get_openai_client_or_none():
+    """
+    Return an OpenAI client if the user has entered and confirmed an API key.
+    Otherwise return None.
+    """
+    key = (st.session_state.get("user_openai_key") or "").strip()
+
+    if not key:
+        return None
+
+    if not st.session_state.get("openai_key_confirmed"):
+        return None
+
+    try:
+        return OpenAI(api_key=key)
+    except Exception:
+        return None
+
+
 def sidebar_openai_key_ui() -> None:
     if "user_openai_key" not in st.session_state:
         st.session_state["user_openai_key"] = ""
