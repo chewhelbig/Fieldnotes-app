@@ -38,19 +38,11 @@ def sidebar_openai_key_ui() -> None:
 
     localS = LocalStorage()
 
-    # --- Restore from browser localStorage (will appear after at most one rerun)
-    # This call populates st.session_state["__ls_api_key"] (component state)
-   restored = localS.getItem(LOCALSTORAGE_KEY_NAME)
-
-
-    restored = st.session_state.get("__ls_api_key")
-    if (
-        isinstance(restored, str)
-        and restored.startswith("sk-")
-        and not st.session_state.get("user_openai_key")
-    ):
+    restored = localS.getItem(LOCALSTORAGE_KEY_NAME)
+    if isinstance(restored, str) and restored.startswith("sk-") and not st.session_state.get("user_openai_key"):
         st.session_state["user_openai_key"] = restored
         # keep confirmed False until user clicks Enter key
+
 
     with st.sidebar:
         st.markdown("### 🔑 OpenAI API key")
