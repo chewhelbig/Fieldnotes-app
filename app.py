@@ -22,45 +22,36 @@ MAX_TOKENS_REFLECTION = 2300
 LOCALSTORAGE_KEY_NAME = "fieldnotes_openai_api_key_v1"
 
 def _localstorage_get(key: str) -> str:
-    """
-    Read a value from the browser's localStorage (client-side only).
-    Always returns a STRING (or "") so Streamlit widgets never crash.
-    """
+    """Always return a string (or '') from browser localStorage."""
     raw = components.html(
         f"""
         <script>
         (function() {{
           const k = {key!r};
           const v = window.localStorage.getItem(k) || "";
-          const msg = {{
+          window.parent.postMessage({{
             isStreamlitMessage: true,
             type: "streamlit:setComponentValue",
             value: v
-          }};
-          window.parent.postMessage(msg, "*");
+          }}, "*");
         }})();
         </script>
         """,
         height=0,
     )
 
-    # Normalize return types across Streamlit versions
     if raw is None:
         return ""
     if isinstance(raw, dict):
-        raw = raw.get("value", "")  # some builds may wrap it
+        raw = raw.get("value", "")
     if not isinstance(raw, str):
         raw = str(raw)
 
     raw = raw.strip()
-
-    # Basic safety check: only accept plausible OpenAI secret keys
-    # (prevents odd objects or accidental junk from breaking UI)
+    # accept only plausible OpenAI keys
     if raw and not raw.startswith("sk-"):
         return ""
-
     return raw
-
 
 
 def _localstorage_set(key: str, value: str) -> None:
@@ -71,31 +62,13 @@ def _localstorage_set(key: str, value: str) -> None:
         (function() {{
           const k = {key!r};
           const v = {value!r};
-          try {{
-            window.localStorage.setItem(k, v);
-          }} catch (e) {{}}
+          try {{ window.localStorage.setItem(k, v); }} catch (e) {{}}
         }})();
         </script>
         """,
         height=0,
     )
 
-
-def _localstorage_delete(key: str) -> None:
-    """Delete a key from browser localStorage (client-side only)."""
-    _ = components.html(
-        f"""
-        <script>
-        (function() {{
-          const k = {key!r};
-          try {{
-            window.localStorage.removeItem(k);
-          }} catch (e) {{}}
-        }})();
-        </script>
-        """,
-        height=0,
-    )
 
 
 # =========================
