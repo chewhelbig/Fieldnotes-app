@@ -85,30 +85,33 @@ def sidebar_openai_key_ui() -> None:
     if "remember_key" not in st.session_state:
         st.session_state["remember_key"] = True  # default on for UX
 
-    # ---- On first load, try restore from browser localStorage (client-side only)
+    # Restore from browser localStorage (client-side only)
     if not st.session_state["user_openai_key"]:
         restored = _localstorage_get(LOCALSTORAGE_KEY_NAME)
         if restored:
             st.session_state["user_openai_key"] = restored
+            # Do NOT auto-confirm; user still clicks "Enter key"
 
     with st.sidebar:
         st.markdown("### 🔑 OpenAI API key")
 
-        # Calm onboarding copy (you can edit below)
+        # Your requested message + link + steps
         with st.expander("Where do I get this key? (2 minutes)", expanded=False):
             st.markdown(
                 """
-- FieldNotes uses OpenAI’s models to generate notes.
-- You use **your own OpenAI account**, and OpenAI bills you directly (usually cents per session).
-- This app does **not** store your notes on the server.
+FieldNotes uses OpenAI’s models to generate notes.  
+You use your own OpenAI account, and OpenAI bills you directly (usually cents per session).  
+This app does not store your notes on the server.
 
 **Steps**
-1) Open the OpenAI platform website  
+1) Open the OpenAI platform website and sign in: https://platform.openai.com/  
 2) Go to **API keys**  
 3) Create a new secret key  
 4) Paste it here
                 """.strip()
             )
+
+        # Ensure key is always a string (prevents crashes)
         st.session_state["user_openai_key"] = str(st.session_state.get("user_openai_key") or "")
 
         st.text_input(
@@ -125,39 +128,22 @@ def sidebar_openai_key_ui() -> None:
             help="Stores the key in your browser only. Turn off if using a shared/public computer.",
         )
 
-        col_a, col_b = st.columns(2)
-        with col_a:
-            if st.button("Enter key"):
-                key = (st.session_state.get("user_openai_key") or "").strip()
-                if not key:
-                    st.session_state["openai_key_confirmed"] = False
-                    st.warning("Please paste your OpenAI API key first.")
-                else:
-                    st.session_state["openai_key_confirmed"] = True
-                    if st.session_state.get("remember_key"):
-                        _localstorage_set(LOCALSTORAGE_KEY_NAME, key)
-                    st.success("✅ Key saved.")
-
-        with col_b:
-            if st.button("Forget key"):
-                st.session_state["user_openai_key"] = ""
+        if st.button("Enter key"):
+            key = (st.session_state.get("user_openai_key") or "").strip()
+            if not key:
                 st.session_state["openai_key_confirmed"] = False
-                _localstorage_delete(LOCALSTORAGE_KEY_NAME)
-                st.info("Key removed from this browser.")
+                st.warning("Please paste your OpenAI API key first.")
+            else:
+                st.session_state["openai_key_confirmed"] = True
+                if st.session_state.get("remember_key"):
+                    _localstorage_set(LOCALSTORAGE_KEY_NAME, key)
+                st.success("✅ Key saved.")
 
         if st.session_state.get("openai_key_confirmed"):
             st.caption("✅ Ready")
         else:
             st.caption("Enter key to enable AI features")
 
-
-
-def get_openai_client_or_none():
-    """Return client if key exists AND user confirmed it, else None."""
-    key = (st.session_state.get("user_openai_key") or "").strip()
-    if not key or not st.session_state.get("openai_key_confirmed"):
-        return None
-    return OpenAI(api_key=key)
 
 
 # =========================
