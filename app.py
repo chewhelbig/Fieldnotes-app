@@ -24,11 +24,9 @@ LOCALSTORAGE_KEY_NAME = "fieldnotes_openai_api_key_v1"
 def _localstorage_get(key: str) -> str:
     """
     Read a value from the browser's localStorage (client-side only).
-    Returns "" if missing.
+    Always returns a STRING (or "") so Streamlit widgets never crash.
     """
-    # This uses Streamlit's component messaging protocol.
-    # It works in Streamlit hosted apps without any server storage.
-    value = components.html(
+    raw = components.html(
         f"""
         <script>
         (function() {{
@@ -45,7 +43,24 @@ def _localstorage_get(key: str) -> str:
         """,
         height=0,
     )
-    return value or ""
+
+    # Normalize return types across Streamlit versions
+    if raw is None:
+        return ""
+    if isinstance(raw, dict):
+        raw = raw.get("value", "")  # some builds may wrap it
+    if not isinstance(raw, str):
+        raw = str(raw)
+
+    raw = raw.strip()
+
+    # Basic safety check: only accept plausible OpenAI secret keys
+    # (prevents odd objects or accidental junk from breaking UI)
+    if raw and not raw.startswith("sk-"):
+        return ""
+
+    return raw
+
 
 
 def _localstorage_set(key: str, value: str) -> None:
