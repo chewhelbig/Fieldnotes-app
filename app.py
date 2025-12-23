@@ -204,19 +204,43 @@ def create_pdf_from_text(content: str) -> bytes:
     pdf.set_font("Arial", size=11)
 
     page_width = pdf.w - 2 * pdf.l_margin
-    paragraphs = safe_content.split("\n\n")
 
-    for para in paragraphs:
-        para = para.strip()
-        if not para:
+    for line in safe_content.split("\n"):
+        line = line.rstrip()
+    
+        # Blank line spacing
+        if not line.strip():
             pdf.ln(4)
             continue
+    
+        # Remove simple markdown bold
+        line = line.replace("**", "")
+    
+        # Optional: make headings look nicer
+        if line.startswith("### "):
+            pdf.set_font("Arial", "B", 12)
+            pdf.multi_cell(page_width, 7, line.replace("### ", ""))
+            pdf.set_font("Arial", "", 11)
+            pdf.ln(1)
+            continue
+    
+        if line.startswith("## "):
+            pdf.set_font("Arial", "B", 13)
+            pdf.multi_cell(page_width, 8, line.replace("## ", ""))
+            pdf.set_font("Arial", "", 11)
+            pdf.ln(2)
+            continue
+    
+        if line.startswith("# "):
+            pdf.set_font("Arial", "B", 14)
+            pdf.multi_cell(page_width, 9, line.replace("# ", ""))
+            pdf.set_font("Arial", "", 11)
+            pdf.ln(3)
+            continue
+    
+        # Normal line
+        pdf.multi_cell(page_width, 6, line)
 
-        para = " ".join(para.splitlines())
-        para = para.replace("**", "")
-
-        pdf.multi_cell(page_width, 6, para)
-        pdf.ln(4)
 
         pdf_out = pdf.output(dest="S")
 
