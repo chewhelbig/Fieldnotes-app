@@ -7,6 +7,8 @@ import streamlit as st
 from openai import OpenAI
 from fpdf import FPDF
 import streamlit.components.v1 as components
+from streamlit_local_storage import LocalStorage
+
 
 
 
@@ -21,61 +23,10 @@ MAX_TOKENS_REFLECTION = 2300
 
 LOCALSTORAGE_KEY_NAME = "fieldnotes_openai_api_key_v1"
 
-def _localstorage_get(key: str) -> str:
-    """Always return a string (or '') from browser localStorage."""
-    raw = components.html(
-        f"""
-        <script>
-        (function() {{
-          const k = {key!r};
-          const v = window.localStorage.getItem(k) || "";
-          window.parent.postMessage({{
-            isStreamlitMessage: true,
-            type: "streamlit:setComponentValue",
-            value: v
-          }}, "*");
-        }})();
-        </script>
-        """,
-        height=0,
-    )
 
-    if raw is None:
-        return ""
-    if isinstance(raw, dict):
-        raw = raw.get("value", "")
-    if not isinstance(raw, str):
-        raw = str(raw)
+LOCALSTORAGE_KEY_NAME = "fieldnotes_openai_api_key_v1"
 
-    raw = raw.strip()
-    # accept only plausible OpenAI keys
-    if raw and not raw.startswith("sk-"):
-        return ""
-    return raw
-
-
-def _localstorage_set(key: str, value: str) -> None:
-    """Write a value to browser localStorage (client-side only)."""
-    _ = components.html(
-        f"""
-        <script>
-        (function() {{
-          const k = {key!r};
-          const v = {value!r};
-          try {{ window.localStorage.setItem(k, v); }} catch (e) {{}}
-        }})();
-        </script>
-        """,
-        height=0,
-    )
-
-
-
-# =========================
-# Sidebar OpenAI key UI
-# =========================
 def sidebar_openai_key_ui() -> None:
-    """Sidebar OpenAI key UI. Optionally remembers key in this browser only."""
     if "user_openai_key" not in st.session_state:
         st.session_state["user_openai_key"] = ""
 
@@ -85,17 +36,24 @@ def sidebar_openai_key_ui() -> None:
     if "remember_key" not in st.session_state:
         st.session_state["remember_key"] = True  # default on for UX
 
-    # Restore from browser localStorage (client-side only)
-    if not st.session_state["user_openai_key"]:
-        restored = _localstorage_get(LOCALSTORAGE_KEY_NAME)
-        if restored:
-            st.session_state["user_openai_key"] = restored
-            # Do NOT auto-confirm; user still clicks "Enter key"
+    localS = LocalStorage()
+
+    # --- Restore from browser localStorage (will appear after at most one rerun)
+    # This call populates st.session_state["__ls_api_key"] (component state)
+    localS.getItem(LOCALSTORAGE_KEY_NAME, key="__ls_api_key")
+
+    restored = st.session_state.get("__ls_api_key")
+    if (
+        isinstance(restored, str)
+        and restored.startswith("sk-")
+        and not st.session_state.get("user_openai_key")
+    ):
+        st.session_state["user_openai_key"] = restored
+        # keep confirmed False until user clicks Enter key
 
     with st.sidebar:
         st.markdown("### 🔑 OpenAI API key")
 
-        # Your requested message + link + steps
         with st.expander("Where do I get this key? (2 minutes)", expanded=False):
             st.markdown(
                 """
@@ -104,14 +62,14 @@ You use your own OpenAI account, and OpenAI bills you directly (usually cents pe
 This app does not store your notes on the server.
 
 **Steps**
-1) Open the OpenAI platform website and sign in: https://platform.openai.com/api-keys  
+1) Open the OpenAI platform website and sign in: https://platform.openai.com/  
 2) Go to **API keys**  
 3) Create a new secret key  
 4) Paste it here
                 """.strip()
             )
 
-        # Ensure key is always a string (prevents crashes)
+        # Always keep as string (prevents widget crashes)
         st.session_state["user_openai_key"] = str(st.session_state.get("user_openai_key") or "")
 
         st.text_input(
@@ -119,13 +77,12 @@ This app does not store your notes on the server.
             type="password",
             key="user_openai_key",
             placeholder="sk-...",
-            help="If 'Remember on this device' is on, the key is stored in your browser only (localStorage).",
         )
 
         st.checkbox(
             "Remember on this device",
             key="remember_key",
-            help="Stores the key in your browser only. Turn off if using a shared/public computer.",
+            help="Stores the key in your browser only (localStorage). Turn off on shared computers.",
         )
 
         if st.button("Enter key"):
@@ -136,13 +93,11 @@ This app does not store your notes on the server.
             else:
                 st.session_state["openai_key_confirmed"] = True
                 if st.session_state.get("remember_key"):
-                    _localstorage_set(LOCALSTORAGE_KEY_NAME, key)
+                    localS.setItem(LOCALSTORAGE_KEY_NAME, key)
                 st.success("✅ Key saved.")
 
-        if st.session_state.get("openai_key_confirmed"):
-            st.caption("✅ Ready")
-        else:
-            st.caption("Enter key to enable AI features")
+        st.caption("✅ Ready" if st.session_state.get("openai_key_confirmed") else "Enter key to enable AI features")
+
 
 
 
