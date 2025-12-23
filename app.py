@@ -62,7 +62,7 @@ You use your own OpenAI account, and OpenAI bills you directly (usually cents pe
 This app does not store your notes on the server.
 
 **Steps**
-1) Open the OpenAI platform website and sign in: https://platform.openai.com/  
+1) Open the OpenAI platform website and sign in: https://platform.openai.com/api-keys  
 2) Go to **API keys**  
 3) Create a new secret key  
 4) Paste it here
