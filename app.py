@@ -137,6 +137,7 @@ def sidebar_openai_key_ui() -> None:
 4) Paste it here
                 """.strip()
             )
+        st.session_state["user_openai_key"] = str(st.session_state.get("user_openai_key") or "")
 
         st.text_input(
             "Paste your OpenAI API key",
