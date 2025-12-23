@@ -218,10 +218,18 @@ def create_pdf_from_text(content: str) -> bytes:
         pdf.multi_cell(page_width, 6, para)
         pdf.ln(4)
 
-    pdf_bytes = pdf.output(dest="S")
-    if isinstance(pdf_bytes, bytearray):
-        pdf_bytes = bytes(pdf_bytes)
-    return pdf_bytes
+        pdf_out = pdf.output(dest="S")
+
+        # fpdf (pyfpdf) often returns a *str* here; Streamlit needs bytes
+        if isinstance(pdf_out, str):
+            pdf_out = pdf_out.encode("latin-1", errors="ignore")
+    
+        # fpdf2 may return bytearray
+        if isinstance(pdf_out, bytearray):
+            pdf_out = bytes(pdf_out)
+    
+        return pdf_out
+
 
 
 def safe_download_name(label: str) -> str:
