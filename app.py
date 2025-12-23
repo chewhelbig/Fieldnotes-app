@@ -40,7 +40,8 @@ def sidebar_openai_key_ui() -> None:
 
     # --- Restore from browser localStorage (will appear after at most one rerun)
     # This call populates st.session_state["__ls_api_key"] (component state)
-    localS.getItem(LOCALSTORAGE_KEY_NAME, key="__ls_api_key")
+   restored = localS.getItem(LOCALSTORAGE_KEY_NAME)
+
 
     restored = st.session_state.get("__ls_api_key")
     if (
