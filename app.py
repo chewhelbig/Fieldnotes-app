@@ -6,6 +6,8 @@ from datetime import datetime
 import streamlit as st
 from openai import OpenAI
 from fpdf import FPDF
+import streamlit.components.v1 as components
+
 
 
 # =========================
@@ -17,41 +19,149 @@ OPENAI_MODEL_NOTES = "gpt-4.1-mini"
 OPENAI_MODEL_REFLECTION = "gpt-4.1-mini"
 MAX_TOKENS_REFLECTION = 2300
 
+LOCALSTORAGE_KEY_NAME = "fieldnotes_openai_api_key_v1"
+
+def _localstorage_get(key: str) -> str:
+    """
+    Read a value from the browser's localStorage (client-side only).
+    Returns "" if missing.
+    """
+    # This uses Streamlit's component messaging protocol.
+    # It works in Streamlit hosted apps without any server storage.
+    value = components.html(
+        f"""
+        <script>
+        (function() {{
+          const k = {key!r};
+          const v = window.localStorage.getItem(k) || "";
+          const msg = {{
+            isStreamlitMessage: true,
+            type: "streamlit:setComponentValue",
+            value: v
+          }};
+          window.parent.postMessage(msg, "*");
+        }})();
+        </script>
+        """,
+        height=0,
+    )
+    return value or ""
+
+
+def _localstorage_set(key: str, value: str) -> None:
+    """Write a value to browser localStorage (client-side only)."""
+    _ = components.html(
+        f"""
+        <script>
+        (function() {{
+          const k = {key!r};
+          const v = {value!r};
+          try {{
+            window.localStorage.setItem(k, v);
+          }} catch (e) {{}}
+        }})();
+        </script>
+        """,
+        height=0,
+    )
+
+
+def _localstorage_delete(key: str) -> None:
+    """Delete a key from browser localStorage (client-side only)."""
+    _ = components.html(
+        f"""
+        <script>
+        (function() {{
+          const k = {key!r};
+          try {{
+            window.localStorage.removeItem(k);
+          }} catch (e) {{}}
+        }})();
+        </script>
+        """,
+        height=0,
+    )
+
 
 # =========================
 # Sidebar OpenAI key UI
 # =========================
 def sidebar_openai_key_ui() -> None:
-    """Show OpenAI key input in sidebar; store it only in this browser session."""
+    """Sidebar OpenAI key UI. Optionally remembers key in this browser only."""
     if "user_openai_key" not in st.session_state:
         st.session_state["user_openai_key"] = ""
 
     if "openai_key_confirmed" not in st.session_state:
         st.session_state["openai_key_confirmed"] = False
 
+    if "remember_key" not in st.session_state:
+        st.session_state["remember_key"] = True  # default on for UX
+
+    # ---- On first load, try restore from browser localStorage (client-side only)
+    if not st.session_state["user_openai_key"]:
+        restored = _localstorage_get(LOCALSTORAGE_KEY_NAME)
+        if restored:
+            st.session_state["user_openai_key"] = restored
+            st.session_state["openai_key_confirmed"] = True
+
     with st.sidebar:
         st.markdown("### 🔑 OpenAI API key")
+
+        # Calm onboarding copy (you can edit below)
+        with st.expander("Where do I get this key? (2 minutes)", expanded=False):
+            st.markdown(
+                """
+- FieldNotes uses OpenAI’s models to generate notes.
+- You use **your own OpenAI account**, and OpenAI bills you directly (usually cents per session).
+- This app does **not** store your notes on the server.
+
+**Steps**
+1) Open the OpenAI platform website  
+2) Go to **API keys**  
+3) Create a new secret key  
+4) Paste it here
+                """.strip()
+            )
+
         st.text_input(
-            "Enter your OpenAI API key",
+            "Paste your OpenAI API key",
             type="password",
             key="user_openai_key",
             placeholder="sk-...",
-            help="Stored only in this browser session. Not saved to disk.",
+            help="If 'Remember on this device' is on, the key is stored in your browser only (localStorage).",
         )
 
-        if st.button("Enter key"):
-            key = (st.session_state.get("user_openai_key") or "").strip()
-            if not key:
+        st.checkbox(
+            "Remember on this device",
+            key="remember_key",
+            help="Stores the key in your browser only. Turn off if using a shared/public computer.",
+        )
+
+        col_a, col_b = st.columns(2)
+        with col_a:
+            if st.button("Enter key"):
+                key = (st.session_state.get("user_openai_key") or "").strip()
+                if not key:
+                    st.session_state["openai_key_confirmed"] = False
+                    st.warning("Please paste your OpenAI API key first.")
+                else:
+                    st.session_state["openai_key_confirmed"] = True
+                    if st.session_state.get("remember_key"):
+                        _localstorage_set(LOCALSTORAGE_KEY_NAME, key)
+                    st.success("✅ Key saved.")
+
+        with col_b:
+            if st.button("Forget key"):
+                st.session_state["user_openai_key"] = ""
                 st.session_state["openai_key_confirmed"] = False
-                st.warning("Please paste your OpenAI API key first.")
-            else:
-                st.session_state["openai_key_confirmed"] = True
-                st.success("✅ Key saved for this session.")
+                _localstorage_delete(LOCALSTORAGE_KEY_NAME)
+                st.info("Key removed from this browser.")
 
         if st.session_state.get("openai_key_confirmed"):
             st.caption("✅ Ready")
         else:
-            st.caption("Enter key")
+            st.caption("Enter key to enable AI features")
+
 
 
 def get_openai_client_or_none():
