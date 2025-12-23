@@ -660,7 +660,13 @@ def main():
     # Session narrative
     if "narrative_text" not in st.session_state:
         st.session_state["narrative_text"] = ""
-
+    
+    if "notes_text" not in st.session_state:
+        st.session_state["notes_text"] = ""
+    
+    if "reflection_text" not in st.session_state:
+        st.session_state["reflection_text"] = ""
+    
     st.markdown("### ✍️ Session narrative")
     narrative = st.text_area(
         "Session narrative (write in your own words)",
@@ -668,7 +674,7 @@ def main():
         height=280,
         placeholder="Write your session details here...",
     )
-
+    
     st.markdown("#### Draft safety")
     st.download_button(
         "⬇️ Download draft (txt)",
@@ -678,37 +684,39 @@ def main():
         help="Download a copy of what you typed so far. Useful if the page refreshes or disconnects.",
     )
     
-    notes_text = None
-    reflection_text = None
-
     if st.button("Generate structured output"):
         if not narrative.strip():
             st.warning("Please enter a session narrative first.")
             st.stop()
-
+    
         combined_narrative = narrative  # no history recall in hosted mode
-
+    
         with st.spinner("Generating clinical notes..."):
-            notes_text = call_openai(combined_narrative, client_name, output_mode)
-
+            st.session_state["notes_text"] = call_openai(combined_narrative, client_name, output_mode)
+    
         if generate_reflection:
             with st.spinner("Generating therapist reflection / supervision view..."):
-                reflection_text = call_reflection_engine(
+                st.session_state["reflection_text"] = call_reflection_engine(
                     narrative=combined_narrative,
-                    ai_output=notes_text,
+                    ai_output=st.session_state["notes_text"],
                     client_name=client_name,
                     intensity=reflection_intensity,
                 )
         else:
-            reflection_text = None
-
-        # Tabs: Notes / Reflection
+            st.session_state["reflection_text"] = ""
+    
+    # ALWAYS read from session_state (survives reruns + downloads)
+    notes_text = st.session_state["notes_text"]
+    reflection_text = st.session_state["reflection_text"]
+    
+    # Tabs: Notes / Reflection (only show if we have something)
+    if notes_text.strip() or reflection_text.strip():
         st.markdown("---")
         notes_tab, reflection_tab = st.tabs(["Notes", "Reflection"])
-
+    
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
         safe_name = safe_download_name(client_name)
-
+    
         with notes_tab:
             st.markdown("### 📝 Clinical notes (AI-structured)")
             st.markdown(
@@ -716,13 +724,12 @@ def main():
                 "or supervision material."
             )
             st.markdown(notes_text)
-
+    
             st.caption(
                 "Reminder: this hosted app does not store notes. "
                 "Download to keep a local copy."
             )
-
-            # TXT download (tables stripped)
+    
             clean_txt = remove_markdown_tables(notes_text)
             st.download_button(
                 label="💾 Download notes as .txt",
@@ -730,34 +737,35 @@ def main():
                 file_name=f"{safe_name}_{timestamp}_notes.txt",
                 mime="text/plain",
             )
-
-            # PDF download
-            pdf_bytes = create_pdf_from_text(notes_text)
-            st.download_button(
-                label="📄 Download notes as PDF",
-                data=pdf_bytes,
-                file_name=f"{safe_name}_{timestamp}_notes.pdf",
-                mime="application/pdf",
-            )
-
+    
+            if notes_text.strip():
+                pdf_bytes = create_pdf_from_text(notes_text)
+                st.download_button(
+                    label="📄 Download notes as PDF",
+                    data=pdf_bytes,
+                    file_name=f"{safe_name}_{timestamp}_notes.pdf",
+                    mime="application/pdf",
+                )
+            else:
+                st.warning("No notes to export yet — generate notes first.")
+    
         with reflection_tab:
             st.markdown("### 🧠 Therapist reflection / supervision view")
-
-            if reflection_text:
+    
+            if reflection_text.strip():
                 st.markdown(
                     "For your eyes only – a supervision-style reflection on your process, "
                     "shame arcs, field dynamics, and possible Gestalt experiments."
                 )
                 st.markdown(reflection_text)
-
-                # Reflection downloads
+    
                 st.download_button(
                     label="💾 Download reflection as .txt",
                     data=reflection_text,
                     file_name=f"{safe_name}_{timestamp}_reflection.txt",
                     mime="text/plain",
                 )
-
+    
                 reflection_pdf = create_pdf_from_text(reflection_text)
                 st.download_button(
                     label="📄 Download reflection as PDF",
