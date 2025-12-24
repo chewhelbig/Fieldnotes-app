@@ -7,12 +7,89 @@ from openai import OpenAI
 from fpdf import FPDF
 import streamlit.components.v1 as components
 
+import sqlite3
+from datetime import date
+
+def init_db():
+    conn = sqlite3.connect("usage.db")
+    c = conn.cursor()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            email TEXT PRIMARY KEY,
+            plan TEXT,
+            credits_remaining INTEGER,
+            monthly_allowance INTEGER,
+            last_reset TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+init_db()
+# ===== User EMAIL ============
+def can_generate(email, cost=1):
+    conn = sqlite3.connect("usage.db")
+    c = conn.cursor()
+    c.execute("SELECT credits_remaining FROM users WHERE email=?", (email,))
+    row = c.fetchone()
+    conn.close()
+    return bool(row and row[0] >= cost)
+
+
+def deduct_credits(email, cost=1):
+    conn = sqlite3.connect("usage.db")
+    c = conn.cursor()
+    c.execute("""
+        UPDATE users
+        SET credits_remaining = credits_remaining - ?
+        WHERE email=?
+    """, (cost, email))
+    conn.commit()
+    conn.close()
+
+
+def reset_if_needed(email):
+    conn = sqlite3.connect("usage.db")
+    c = conn.cursor()
+    c.execute("SELECT last_reset, monthly_allowance FROM users WHERE email=?", (email,))
+    row = c.fetchone()
+
+    if row:
+        last_reset, allowance = row
+        if date.fromisoformat(last_reset).month != date.today().month:
+            c.execute("""
+                UPDATE users
+                SET credits_remaining=?, last_reset=?
+                WHERE email=?
+            """, (allowance, date.today().isoformat(), email))
+
+    conn.commit()
+    conn.close()
+# ============ USER RECORD =========
+
+def ensure_user_exists(email):
+    conn = sqlite3.connect("usage.db")
+    c = conn.cursor()
+    c.execute("SELECT email FROM users WHERE email=?", (email,))
+    if not c.fetchone():
+        c.execute("""
+            INSERT INTO users (email, plan, credits_remaining, monthly_allowance, last_reset)
+            VALUES (?, ?, ?, ?, ?)
+        """, (email, "monthly", 30, 30, date.today().isoformat()))
+    conn.commit()
+    conn.close()
+
+
+
 # ------Get OPEN AI------------
 @st.cache_resource
 def get_openai_client():
     return OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
 client = get_openai_client()
+
+ensure_user_exists(user_email)
+reset_if_needed(user_email)
 
 
 # =========================
@@ -24,6 +101,12 @@ OPENAI_MODEL_NOTES = "gpt-4.1-mini"
 OPENAI_MODEL_REFLECTION = "gpt-4.1-mini"
 MAX_TOKENS_REFLECTION = 2300
 
+# ==================
+# Credits
+#===================
+
+COST_GENERATE_NOTES = 1
+# COST_HELDA = 2 -- for later
 
 
 # =========================
@@ -596,15 +679,20 @@ def main():
     )
 
     
-    if st.button("⚙️ Generate structured output"):
-        if not narrative.strip():
-            st.warning("Please enter a session narrative first.")
+    if st.button("Generate structured output"):
+
+        if not can_generate(user_email, COST_GENERATE_NOTES):
+            st.warning(
+                "You’ve used all your AI credits.\n\n"
+                "Please top up to continue or wait for your monthly reset."
+            )
             st.stop()
     
-        combined_narrative = narrative  # no history recall in hosted mode
-    
         with st.spinner("Generating clinical notes..."):
-            st.session_state["notes_text"] = call_openai(combined_narrative, client_name, output_mode)
+            ai_output = call_openai(...)
+    
+        deduct_credits(user_email, COST_GENERATE_NOTES)
+
         st.session_state["gen_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M")
 
     
