@@ -611,7 +611,7 @@ def main():
     ensure_user_exists(user_email)
     reset_if_needed(user_email)
     
-    # ---- sidebar settings ----
+   # ---- sidebar settings ----
     st.sidebar.header("Settings")
     output_mode = st.sidebar.radio("Output detail level", ["Short", "Full"], index=1)
     
@@ -628,20 +628,21 @@ def main():
         )
     else:
         reflection_intensity = "Deep"
-
-
-    st.markdown("---")
-    st.subheader("Hosted mode: download-only")
-    st.caption("No notes are stored on this server. Use Download to save files to your device.")
-
-    st.markdown("---")
-    st.subheader("About")
-    st.caption(f"FieldNotes for Therapists · v{APP_VERSION}")
-    st.caption("Created by Nicole Chew-Helbig, Gestalt psychotherapist")
-    st.caption(
+    
+    # ---- sidebar info ----
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Hosted mode: download-only")
+    st.sidebar.caption("No notes are stored on this server. Use Download to save files to your device.")
+    
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("About")
+    st.sidebar.caption(f"FieldNotes for Therapists · v{APP_VERSION}")
+    st.sidebar.caption("Created by Nicole Chew-Helbig, Gestalt psychotherapist")
+    st.sidebar.caption(
         "These notes are generated to support your clinical thinking and are not a "
         "substitute for your professional judgment or supervision."
-        )
+    )
+
 
     # Main content
     st.title("FieldNotes - Session Companion")
