@@ -604,8 +604,9 @@ def main():
     ).strip().lower()
     
     if not user_email:
-        st.info("Please enter your email to continue.")
+        st.sidebar.info("Please enter your email to continue.")
         st.stop()
+
     
     st.session_state["user_email"] = user_email
     ensure_user_exists(user_email)
