@@ -702,7 +702,7 @@ def main():
     )
 
     # Client label (not stored)
-    st.markdown("###👨🏽‍🦰🧔🏻‍♀️ Client & Session Code")
+    st.markdown("### 👨🏽‍🦰🧔🏻‍♀️ Client & Session Code")
     client_name = st.text_input(
         "Client label for this session:",
         value="",
@@ -721,13 +721,13 @@ def main():
     
     st.markdown("### ✍️ Session narrative")
     narrative = st.text_area(
-        "Session narrative (write freely in your own words. Be reflexive.)",
+        "Session narrative (Wite freely in your own words. Be reflexive.)",
         key="narrative_text",
         height=280,
         placeholder="Write your session details here...",
     )
     
-    st.markdown("## Save draft")
+    st.markdown("#### Save draft")
     st.download_button(
         "⬇️ Download draft (txt)",
         data=(narrative or ""),
