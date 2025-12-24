@@ -697,10 +697,10 @@ def main():
 
     if st.button("Generate structured output", disabled=not email_ok):
     # safety: in case of weird rerun edge cases
-    if not email_ok:
-        st.warning("Please enter your email in the sidebar to continue.")
-        st.stop()
-    
+        if not email_ok:
+            st.warning("Please enter your email in the sidebar to continue.")
+            st.stop()
+        
     
     
         # 1) NOTES: check credits BEFORE calling AI
