@@ -77,6 +77,68 @@ def get_openai_client():
 
 client = get_openai_client()
 
+# =========================
+# OpenAI call helpers
+# =========================
+def call_openai(combined_narrative: str, client_name: str, output_mode: str) -> str:
+    combined_narrative = normalize_text(combined_narrative)
+    client_name = normalize_text(client_name)
+    output_mode = normalize_text(output_mode)
+
+    user_prompt = build_prompt(combined_narrative, client_name, output_mode)
+
+    try:
+        # uses the cached client you already created
+        response = client.chat.completions.create(
+            model=OPENAI_MODEL_NOTES,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+        return response.choices[0].message.content
+
+    except Exception as e:
+        st.error("⚠️ There was a problem contacting the AI model.")
+        st.caption("Technical details: " + repr(e))
+        return "Error: The AI could not generate output. Please try again."
+
+
+def call_reflection_engine(
+    narrative: str,
+    ai_output: str,
+    client_name: str,
+    intensity: str,
+) -> str:
+    narrative = normalize_text(narrative)
+    ai_output = normalize_text(ai_output)
+    client_name = normalize_text(client_name)
+    intensity = normalize_text(intensity)
+
+    user_prompt = build_reflection_prompt(
+        narrative=narrative,
+        ai_output=ai_output,
+        client_name=client_name,
+        intensity=intensity,
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model=OPENAI_MODEL_REFLECTION,
+            messages=[
+                {"role": "system", "content": REFLECTION_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.4,
+            max_tokens=MAX_TOKENS_REFLECTION,
+        )
+        return response.choices[0].message.content.strip()
+
+    except Exception as e:
+        st.error("⚠️ There was a problem contacting the AI model.")
+        st.caption("Technical details: " + repr(e))
+        return "Error: The AI could not generate reflection output. Please try again."
+
 
 # =========================
 # Hosted / download-only mode
