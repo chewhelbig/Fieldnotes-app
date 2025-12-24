@@ -106,6 +106,13 @@ MAX_TOKENS_REFLECTION = 2300
 #===================
 
 COST_GENERATE_NOTES = 1
+REFLECTION_COST = {
+    "Basic": 1,
+    "Medium": 1,
+    "Deep": 2,
+    "Very deep": 2,
+}
+
 # COST_HELDA = 2 -- for later
 
 
@@ -612,14 +619,33 @@ def main():
         )
 
         if generate_reflection:
-            reflection_intensity = st.selectbox(
-                "Reflection intensity",
-                options=["Basic", "Deep", "Very deep"],
-                index=1,
-                help="Basic = brief highlights, Deep = fuller reflection, Very deep = more layered supervision-style exploration.",
-            )
+            cost = REFLECTION_COST.get(reflection_intensity, 1)
+        
+            # Ensure user exists + reset monthly if needed (do this earlier once per run)
+            # ensure_user_exists(user_email)
+            # reset_if_needed(user_email)
+        
+            if not can_generate(user_email, cost):
+                st.warning(
+                    "You don’t have enough AI credits to generate a reflection.\n\n"
+                    "Top up to continue, or wait for your monthly reset."
+                )
+                st.session_state["reflection_text"] = ""
+                st.stop()
+        
+            with st.spinner("Generating therapist reflection / supervision view..."):
+                st.session_state["reflection_text"] = call_reflection_engine(
+                    narrative=combined_narrative,
+                    ai_output=st.session_state["notes_text"],
+                    client_name=client_name,
+                    intensity=reflection_intensity,
+                )
+        
+            deduct_credits(user_email, cost)
+        
         else:
-            reflection_intensity = "Deep"
+            st.session_state["reflection_text"] = ""
+
 
         st.markdown("---")
         st.subheader("Hosted mode: download-only")
