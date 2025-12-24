@@ -594,8 +594,7 @@ def main():
     if "gen_timestamp" not in st.session_state:
         st.session_state["gen_timestamp"] = ""
 
-    # ========= Sidebar: key input + settings ===========
-    
+    # ========= Sidebar: account ===========
     st.sidebar.markdown("### 👤 Account")
     user_email = st.sidebar.text_input(
         "Email (for subscription & credits)",
@@ -605,14 +604,14 @@ def main():
     
     email_ok = bool(user_email)
     
-        if not email_ok:
-            st.sidebar.info("Enter your email to enable credits & downloads.")
-        else:
-            st.session_state["user_email"] = user_email
-            ensure_user_exists(user_email)
-            reset_if_needed(user_email)
+    if not email_ok:
+        st.sidebar.info("Enter your email to enable credits & downloads.")
+    else:
+        st.session_state["user_email"] = user_email
+        ensure_user_exists(user_email)
+        reset_if_needed(user_email)
     
-    
+        
         
         st.session_state["user_email"] = user_email
         ensure_user_exists(user_email)
@@ -694,25 +693,30 @@ def main():
         file_name="fieldnotes_draft.txt",
         mime="text/plain",
     )
+    
+    # ===== Generate button (main area) =====
+    if st.button("Generate structured output", disabled=not email_ok):
+        if not email_ok:
+            st.warning("Please enter your email in the sidebar to continue.")
+            st.stop()
+    
+        if not narrative.strip():
+            st.warning("Please enter a session narrative first.")
+            st.stop()
+    
+        combined_narrative = narrative
+    
+        # 1) NOTES: check credits BEFORE calling AI
+        if not can_generate(user_email, COST_GENERATE_NOTES):
+            st.warning("Not enough credits to generate notes. Please top up.")
+            st.stop()
+    
+        with st.spinner("Generating clinical notes..."):
+            notes_text = call_openai(combined_narrative, client_name, output_mode)
+    
+        st.session_state["notes_text"] = notes_text
+        deduct_credits(user_email, COST_GENERATE_NOTES)
 
-        if st.button("Generate structured output", disabled=not email_ok):
-            # safety: in case of weird rerun edge cases
-            if not email_ok:
-                st.warning("Please enter your email in the sidebar to continue.")
-                st.stop()
-            
-        
-        
-            # 1) NOTES: check credits BEFORE calling AI
-            if not can_generate(user_email, COST_GENERATE_NOTES):
-                st.warning("Not enough credits to generate notes. Please top up.")
-                st.stop()
-        
-            with st.spinner("Generating clinical notes..."):
-                notes_text = call_openai(combined_narrative, client_name, output_mode)
-        
-            st.session_state["notes_text"] = notes_text
-            deduct_credits(user_email, COST_GENERATE_NOTES)
     
         # 2) REFLECTION (optional)
         if generate_reflection:
