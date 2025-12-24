@@ -694,7 +694,7 @@ def main():
     # Main content
     st.title("FieldNotes - Session Companion")
     st.write(
-        "FieldNotes is a Gestalt-informed AI companion to help you turn a quick narrative into "
+        "FieldNotes is a Gestalt-informed AI companion to help therapists turn a quick narrative into "
         "clear session notes and supervision material.\n\n"
         "**Hosted download-only mode:** This site does **not** store your notes on the server. "
         "Your text is sent to the OpenAI API to generate output, then displayed here. "
@@ -702,11 +702,11 @@ def main():
     )
 
     # Client label (not stored)
-    st.markdown("### 🧑‍🤝‍🧑 Client name (typed each time — not stored)")
+    st.markdown("###👨🏽‍🦰🧔🏻‍♀️ Client & Session Code")
     client_name = st.text_input(
         "Client label for this session:",
         value="",
-        placeholder="e.g. Emma, Couple 03, C-017 (avoid full names if possible)",
+        placeholder="e.g. Emma-250313, Couple 03, C-017 (avoid full names if possible)",
     ).strip() or "Unknown client"
 
     # Session narrative
@@ -721,19 +721,19 @@ def main():
     
     st.markdown("### ✍️ Session narrative")
     narrative = st.text_area(
-        "Session narrative (write in your own words)",
+        "Session narrative (write freely in your own words. Be reflexive.)",
         key="narrative_text",
         height=280,
         placeholder="Write your session details here...",
     )
     
-    st.markdown("#### Draft safety")
+    st.markdown("## Save draft")
     st.download_button(
         "⬇️ Download draft (txt)",
         data=(narrative or ""),
         file_name="fieldnotes_draft.txt",
         mime="text/plain",
-        help="Download a copy of what you typed so far. Useful if the page refreshes or disconnects.",
+        help="Download a copy of what you typed so far in case the page refreshes or disconnects.",
     )
     
     if st.button("Generate structured output"):
