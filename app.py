@@ -77,6 +77,7 @@ def get_openai_client():
     if not key:
         return None
     return OpenAI(api_key=key)
+
     client = get_openai_client()
     if client is None:
         st.sidebar.error("Server is missing OPENAI_API_KEY (Render env var).")
