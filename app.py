@@ -652,7 +652,6 @@ def main():
 
 
     # ========= Main content =================
-   
     st.title("FieldNotes - Session Companion")
     st.write(
         "FieldNotes is a Gestalt-informed AI companion to help therapists turn a quick narrative into "
