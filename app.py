@@ -567,13 +567,10 @@ def ensure_user_exists(email: str):
     conn.close()
 
 
-# =========================
-# Streamlit app
-# =========================
 def main():
     st.set_page_config(page_title="FieldNotes for Therapists", layout="centered")
 
-     # ---- CSS (put it HERE) ----
+    # ---- CSS (put it HERE) ----
     st.markdown("""
     <style>
     div.stDownloadButton > button {
@@ -590,7 +587,7 @@ def main():
     </style>
     """, unsafe_allow_html=True)
     # ---- end CSS ----
-    
+
     if "gen_timestamp" not in st.session_state:
         st.session_state["gen_timestamp"] = ""
 
@@ -601,31 +598,25 @@ def main():
         value=st.session_state.get("user_email", ""),
         placeholder="you@clinic.com",
     ).strip().lower()
-    
+
     email_ok = bool(user_email)
-    
+
     if not email_ok:
         st.sidebar.info("Enter your email to enable credits & downloads.")
     else:
         st.session_state["user_email"] = user_email
         ensure_user_exists(user_email)
         reset_if_needed(user_email)
-    
-        
-        
-        st.session_state["user_email"] = user_email
-        ensure_user_exists(user_email)
-        reset_if_needed(user_email)
-    
-   # ---- sidebar settings ----
+
+    # ---- sidebar settings ----
     st.sidebar.header("Settings")
     output_mode = st.sidebar.radio("Output detail level", ["Short", "Full"], index=1)
-    
+
     generate_reflection = st.sidebar.checkbox(
         "Generate therapist reflection / supervision view",
         value=False,
     )
-    
+
     if generate_reflection:
         reflection_intensity = st.sidebar.selectbox(
             "Reflection intensity",
@@ -634,12 +625,12 @@ def main():
         )
     else:
         reflection_intensity = "Deep"
-    
+
     # ---- sidebar info ----
     st.sidebar.markdown("---")
     st.sidebar.subheader("Hosted mode: download-only")
     st.sidebar.caption("No notes are stored on this server. Use Download to save files to your device.")
-    
+
     st.sidebar.markdown("---")
     st.sidebar.subheader("About")
     st.sidebar.caption(f"FieldNotes for Therapists · v{APP_VERSION}")
@@ -648,7 +639,6 @@ def main():
         "These notes are generated to support your clinical thinking and are not a "
         "substitute for your professional judgment or supervision."
     )
-
 
     # ========= Main content =================
     st.title("FieldNotes - Session Companion")
@@ -659,6 +649,9 @@ def main():
         "Use the download buttons to save to your own device."
     )
 
+    if not email_ok:
+        st.info("To start: enter your email in the sidebar (used only for credits & billing).")
+
     # Client label (not stored)
     st.markdown("### 👨🏽‍🦰🧔🏻‍♀️ Client & Session Code")
     client_name = st.text_input(
@@ -667,66 +660,63 @@ def main():
         placeholder="e.g. Emma-250313, Couple 03, C-017 (avoid full names if possible)",
     ).strip() or "Unknown client"
 
-    # Session narrative
+    # Session narrative (stored only in session_state in the browser session)
     if "narrative_text" not in st.session_state:
         st.session_state["narrative_text"] = ""
-    
+
     if "notes_text" not in st.session_state:
         st.session_state["notes_text"] = ""
-    
+
     if "reflection_text" not in st.session_state:
         st.session_state["reflection_text"] = ""
-    
+
     st.markdown("### ✍️ Session narrative")
     narrative = st.text_area(
-        "Session narrative (Wite freely in your own words. Be reflexive.)",
+        "Session narrative (Write freely in your own words. Be reflexive.)",
         key="narrative_text",
         height=280,
         placeholder="Write your session details here...",
     )
-    
 
-    
     st.download_button(
         label="save draft (.txt)",
         data=(narrative or ""),
         file_name="fieldnotes_draft.txt",
         mime="text/plain",
     )
-    
+
     # ===== Generate button (main area) =====
     if st.button("Generate structured output", disabled=not email_ok):
         if not email_ok:
             st.warning("Please enter your email in the sidebar to continue.")
             st.stop()
-    
+
         if not narrative.strip():
             st.warning("Please enter a session narrative first.")
             st.stop()
-    
+
         combined_narrative = narrative
-    
+
         # 1) NOTES: check credits BEFORE calling AI
         if not can_generate(user_email, COST_GENERATE_NOTES):
             st.warning("Not enough credits to generate notes. Please top up.")
             st.stop()
-    
+
         with st.spinner("Generating clinical notes..."):
             notes_text = call_openai(combined_narrative, client_name, output_mode)
-    
+
         st.session_state["notes_text"] = notes_text
         deduct_credits(user_email, COST_GENERATE_NOTES)
 
-    
         # 2) REFLECTION (optional)
         if generate_reflection:
             cost = REFLECTION_COST.get(reflection_intensity, 1)
-    
+
             if not can_generate(user_email, cost):
                 st.warning("Not enough credits to generate reflection. Please top up.")
                 st.session_state["reflection_text"] = ""
                 st.stop()
-    
+
             with st.spinner("Generating therapist reflection / supervision view..."):
                 reflection = call_reflection_engine(
                     narrative=combined_narrative,
@@ -734,27 +724,24 @@ def main():
                     client_name=client_name,
                     intensity=reflection_intensity,
                 )
-    
+
             st.session_state["reflection_text"] = reflection
             deduct_credits(user_email, cost)
         else:
             st.session_state["reflection_text"] = ""
 
-
-    
     # ALWAYS read from session_state (survives reruns + downloads)
     notes_text = st.session_state["notes_text"]
     reflection_text = st.session_state["reflection_text"]
-    
+
     # Tabs: Notes / Reflection (only show if we have something)
     if notes_text.strip() or reflection_text.strip():
         st.markdown("---")
         notes_tab, reflection_tab = st.tabs(["Notes", "Reflection"])
-    
-        timestamp = st.session_state.get("gen_timestamp") or datetime.now().strftime("%Y-%m-%d_%H-%M")
 
+        timestamp = st.session_state.get("gen_timestamp") or datetime.now().strftime("%Y-%m-%d_%H-%M")
         safe_name = safe_download_name(client_name)
-    
+
         with notes_tab:
             st.markdown("### 📝 Clinical notes (AI-structured)")
             st.markdown(
@@ -762,12 +749,12 @@ def main():
                 "or supervision material."
             )
             st.markdown(notes_text)
-    
+
             st.caption(
                 "Reminder: this hosted app does not store notes. "
                 "Download to keep a local copy."
             )
-    
+
             clean_txt = remove_markdown_tables(notes_text)
             st.download_button(
                 label="💾 Download notes as .txt",
@@ -775,7 +762,7 @@ def main():
                 file_name=f"{safe_name}_{timestamp}_notes.txt",
                 mime="text/plain",
             )
-    
+
             if notes_text.strip():
                 pdf_bytes = create_pdf_from_text(notes_text)
                 st.download_button(
@@ -786,24 +773,24 @@ def main():
                 )
             else:
                 st.warning("No notes to export yet — generate notes first.")
-    
+
         with reflection_tab:
             st.markdown("###🧑🏼‍🦳 Therapist reflection / supervision view")
-    
+
             if reflection_text.strip():
                 st.markdown(
                     "For your eyes only – a supervision-style reflection on your process, "
                     "shame arcs, field dynamics, and possible Gestalt experiments."
                 )
                 st.markdown(reflection_text)
-    
+
                 st.download_button(
                     label="💾 Download reflection as .txt",
                     data=reflection_text,
                     file_name=f"{safe_name}_{timestamp}_reflection.txt",
                     mime="text/plain",
                 )
-    
+
                 reflection_pdf = create_pdf_from_text(reflection_text)
                 st.download_button(
                     label="📄 Download reflection as PDF",
@@ -816,9 +803,8 @@ def main():
                     "No reflection generated for this session. "
                     "Tick the reflection option in the sidebar if you want one next time."
                 )
-    
-    st.caption(f"FieldNotes for Therapists · v{APP_VERSION} · Created by Nicole Chew-Helbig")
 
+    st.caption(f"FieldNotes for Therapists · v{APP_VERSION} · Created by Nicole Chew-Helbig")
 
 if __name__ == "__main__":
     main()
