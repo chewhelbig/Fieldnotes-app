@@ -553,9 +553,18 @@ Reflection depth: {intensity}
 
 Respond in a supervisor-style reflective tone, grounded in Gestalt field theory.
 """
-
-
-
+# ======Ensure=============
+def ensure_user_exists(email: str):
+    conn = sqlite3.connect("usage.db")
+    c = conn.cursor()
+    c.execute("SELECT email FROM users WHERE email=?", (email,))
+    if not c.fetchone():
+        c.execute("""
+            INSERT INTO users (email, plan, credits_remaining, monthly_allowance, last_reset)
+            VALUES (?, ?, ?, ?, ?)
+        """, (email, "monthly", 30, 30, date.today().isoformat()))
+    conn.commit()
+    conn.close()
 
 
 # =========================
@@ -586,7 +595,7 @@ def main():
         st.session_state["gen_timestamp"] = ""
 
     # ========= Sidebar: key input + settings ===========
-    sidebar_openai_key_ui()
+
 
     st.sidebar.markdown("### 👤 Account")
     user_email = st.sidebar.text_input(
