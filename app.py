@@ -652,6 +652,9 @@ def main():
 
 
     # Main content
+    if not email_ok:
+    st.info("To start: enter your email in the sidebar (used only for credits & billing).")
+
     st.title("FieldNotes - Session Companion")
     st.write(
         "FieldNotes is a Gestalt-informed AI companion to help therapists turn a quick narrative into "
