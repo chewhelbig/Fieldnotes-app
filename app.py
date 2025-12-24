@@ -585,9 +585,28 @@ def main():
     if "gen_timestamp" not in st.session_state:
         st.session_state["gen_timestamp"] = ""
 
-    # Sidebar: key input + settings
+    # ========= Sidebar: key input + settings ===========
     sidebar_openai_key_ui()
 
+    st.sidebar.markdown("### 👤 Account")
+    user_email = st.sidebar.text_input(
+        "Email (for subscription & credits)",
+        value=st.session_state.get("user_email", ""),
+        placeholder="you@clinic.com",
+    ).strip().lower()
+    
+    if not user_email:
+        st.info("Please enter your email to continue.")
+        st.stop()
+    
+    st.session_state["user_email"] = user_email
+
+
+    ensure_user_exists(user_email)
+    reset_if_needed(user_email)
+
+
+    
     with st.sidebar:
         st.header("Settings")
 
