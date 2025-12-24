@@ -116,6 +116,19 @@ This app does not store your notes on the server.
 # =========================
 # Text/PDF helpers
 # =========================
+def normalize_text(s: str) -> str:
+    """Normalize common “smart” punctuation to plain ASCII to avoid ascii-encode crashes."""
+    if not s:
+        return ""
+    return (
+        s.replace("\u2014", "-")  # em dash —
+         .replace("\u2013", "-")  # en dash –
+         .replace("\u2018", "'")  # ‘
+         .replace("\u2019", "'")  # ’
+         .replace("\u201c", '"')  # “
+         .replace("\u201d", '"')  # ”
+    )
+
 def remove_markdown_tables(text: str) -> str:
     """Remove any Markdown table (lines starting with '|') from plain text output."""
     lines = text.split("\n")
@@ -556,6 +569,10 @@ Respond in a supervisor-style reflective tone, grounded in Gestalt field theory.
 # OpenAI call helpers
 # =========================
 def call_openai(narrative: str, client_name: str, output_mode: str) -> str:
+    narrative = normalize_text(narrative)
+    client_name = normalize_text(client_name)
+    output_mode = normalize_text(output_mode)
+
     user_prompt = build_prompt(narrative, client_name, output_mode)
 
     try:
@@ -575,8 +592,9 @@ def call_openai(narrative: str, client_name: str, output_mode: str) -> str:
 
     except Exception as e:
         st.error("⚠️ There was a problem contacting the AI model.")
-        st.caption(f"Technical details: {e}")
+        st.caption("Technical details: " + repr(e))
         return "Error: The AI could not generate output. Please try again."
+
 
 
 def call_reflection_engine(
@@ -585,6 +603,11 @@ def call_reflection_engine(
     client_name: str,
     intensity: str,
 ) -> str:
+    narrative = normalize_text(narrative)
+    ai_output = normalize_text(ai_output)
+    client_name = normalize_text(client_name)
+    intensity = normalize_text(intensity)
+
     user_prompt = build_reflection_prompt(
         narrative=narrative,
         ai_output=ai_output,
@@ -611,8 +634,9 @@ def call_reflection_engine(
 
     except Exception as e:
         st.error("⚠️ There was a problem contacting the AI model.")
-        st.caption(f"Technical details: {e}")
+        st.caption("Technical details: " + repr(e))
         return "Error: The AI could not generate reflection output. Please try again."
+
 
 
 # =========================
