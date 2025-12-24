@@ -603,9 +603,15 @@ def main():
         placeholder="you@clinic.com",
     ).strip().lower()
     
-    if not user_email:
-        st.sidebar.info("Please enter your email to continue.")
-        st.stop()
+    email_ok = bool(user_email)
+    
+    if not email_ok:
+        st.sidebar.info("Enter your email to enable credits & downloads.")
+    else:
+        st.session_state["user_email"] = user_email
+        ensure_user_exists(user_email)
+        reset_if_needed(user_email)
+
 
     
     st.session_state["user_email"] = user_email
