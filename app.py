@@ -595,8 +595,7 @@ def main():
         st.session_state["gen_timestamp"] = ""
 
     # ========= Sidebar: key input + settings ===========
-
-
+    
     st.sidebar.markdown("### 👤 Account")
     user_email = st.sidebar.text_input(
         "Email (for subscription & credits)",
@@ -609,66 +608,26 @@ def main():
         st.stop()
     
     st.session_state["user_email"] = user_email
-
-
     ensure_user_exists(user_email)
     reset_if_needed(user_email)
-
-
     
-    with st.sidebar:
-        st.header("Settings")
-
-        output_mode = st.radio(
-            "Output detail level",
-            ["Short", "Full"],
+    # ---- sidebar settings ----
+    st.sidebar.header("Settings")
+    output_mode = st.sidebar.radio("Output detail level", ["Short", "Full"], index=1)
+    
+    generate_reflection = st.sidebar.checkbox(
+        "Generate therapist reflection / supervision view",
+        value=False,
+    )
+    
+    if generate_reflection:
+        reflection_intensity = st.sidebar.selectbox(
+            "Reflection intensity",
+            options=["Basic", "Deep", "Very deep"],
             index=1,
-            help="Short = clean narrative + brief SOAP. Full = all sections including questions, contact cycle, unfinished business.",
         )
-
-        generate_reflection = st.checkbox(
-            "Generate therapist reflection / supervision view",
-            value=False,
-            help="Uses the session narrative + generated notes to create a supervision-style reflection just for you.",
-        )
-        
-        if generate_reflection:
-            reflection_intensity = st.selectbox(
-                "Reflection intensity",
-                options=["Basic", "Deep", "Very deep"],
-                index=1,
-            )
-        else:
-            reflection_intensity = "Deep"
-
-        combined_narrative = narrative
-
-        with st.spinner("Generating clinical notes..."):
-            notes_text = call_openai(combined_narrative, client_name, output_mode)
-        st.session_state["notes_text"] = notes_text
-        deduct_credits(user_email, COST_GENERATE_NOTES)
-        
-        if generate_reflection:
-            cost = REFLECTION_COST.get(reflection_intensity, 1)
-        
-            if not can_generate(user_email, cost):
-                st.warning("Not enough credits to generate reflection. Please top up.")
-                st.session_state["reflection_text"] = ""
-                st.stop()
-        
-            with st.spinner("Generating therapist reflection / supervision view..."):
-                reflection = call_reflection_engine(
-                    narrative=combined_narrative,
-                    ai_output=notes_text,
-                    client_name=client_name,
-                    intensity=reflection_intensity,
-                )
-            st.session_state["reflection_text"] = reflection
-            deduct_credits(user_email, cost)
-        else:
-            st.session_state["reflection_text"] = ""
-
-
+    else:
+        reflection_intensity = "Deep"
 
 
         st.markdown("---")
@@ -730,37 +689,45 @@ def main():
 
     
     if st.button("Generate structured output"):
+    if not narrative.strip():
+        st.warning("Please enter a session narrative first.")
+        st.stop()
 
-        if not can_generate(user_email, COST_GENERATE_NOTES):
-            st.warning(
-                "You’ve used all your AI credits.\n\n"
-                "Please top up to continue or wait for your monthly reset."
-            )
-            st.stop()
-    
-        with st.spinner("Generating clinical notes..."):
-            notes_text = call_openai(
-                combined_narrative,
-                client_name,
-                output_mode
-            )
+    combined_narrative = narrative  # (or your history-augmented version)
 
-    
-        deduct_credits(user_email, COST_GENERATE_NOTES)
+    # 1) NOTES: check credits BEFORE calling AI
+    if not can_generate(user_email, COST_GENERATE_NOTES):
+        st.warning("Not enough credits to generate notes. Please top up.")
+        st.stop()
 
-        st.session_state["gen_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    with st.spinner("Generating clinical notes..."):
+        notes_text = call_openai(combined_narrative, client_name, output_mode)
 
-    
-        if generate_reflection:
-            with st.spinner("Generating therapist reflection / supervision view..."):
-                st.session_state["reflection_text"] = call_reflection_engine(
-                    narrative=combined_narrative,
-                    ai_output=st.session_state["notes_text"],
-                    client_name=client_name,
-                    intensity=reflection_intensity,
-                )
-        else:
+    st.session_state["notes_text"] = notes_text
+    deduct_credits(user_email, COST_GENERATE_NOTES)
+
+    # 2) REFLECTION (optional): check credits BEFORE calling AI
+    if generate_reflection:
+        cost = REFLECTION_COST.get(reflection_intensity, 1)
+
+        if not can_generate(user_email, cost):
+            st.warning("Not enough credits to generate reflection. Please top up.")
             st.session_state["reflection_text"] = ""
+            st.stop()
+
+        with st.spinner("Generating therapist reflection / supervision view..."):
+            reflection = call_reflection_engine(
+                narrative=combined_narrative,
+                ai_output=notes_text,
+                client_name=client_name,
+                intensity=reflection_intensity,
+            )
+
+        st.session_state["reflection_text"] = reflection
+        deduct_credits(user_email, cost)
+    else:
+        st.session_state["reflection_text"] = ""
+
     
     # ALWAYS read from session_state (survives reruns + downloads)
     notes_text = st.session_state["notes_text"]
