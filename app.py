@@ -644,6 +644,9 @@ def call_reflection_engine(
 # =========================
 def main():
     st.set_page_config(page_title="FieldNotes for Therapists", layout="centered")
+    
+    if "gen_timestamp" not in st.session_state:
+        st.session_state["gen_timestamp"] = ""
 
     # Sidebar: key input + settings
     sidebar_openai_key_ui()
@@ -741,6 +744,8 @@ def main():
     
         with st.spinner("Generating clinical notes..."):
             st.session_state["notes_text"] = call_openai(combined_narrative, client_name, output_mode)
+        st.session_state["gen_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M")
+
     
         if generate_reflection:
             with st.spinner("Generating therapist reflection / supervision view..."):
@@ -762,7 +767,8 @@ def main():
         st.markdown("---")
         notes_tab, reflection_tab = st.tabs(["Notes", "Reflection"])
     
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
+        timestamp = st.session_state.get("gen_timestamp") or datetime.now().strftime("%Y-%m-%d_%H-%M")
+
         safe_name = safe_download_name(client_name)
     
         with notes_tab:
@@ -826,7 +832,7 @@ def main():
                     "No reflection generated for this session. "
                     "Tick the reflection option in the sidebar if you want one next time."
                 )
-
+    
     st.caption(f"FieldNotes for Therapists · v{APP_VERSION} · Created by Nicole Chew-Helbig")
 
 
