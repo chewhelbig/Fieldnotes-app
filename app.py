@@ -167,6 +167,17 @@ def normalize_text(s: str) -> str:
          .replace("\u201d", '"')  # ”
     )
 
+def to_latin1_safe(s: str) -> str:
+    """
+    Force content to be safe for pyfpdf (latin-1).
+    Replaces common unicode punctuation, then drops anything not representable.
+    """
+    s = normalize_text(s or "")
+    s = s.replace("\u00a0", " ")  # non-breaking space
+    # Finally: drop any characters pyfpdf can't encode
+    return s.encode("latin-1", errors="ignore").decode("latin-1")
+
+
 def remove_markdown_tables(text: str) -> str:
     """Remove any Markdown table (lines starting with '|') from plain text output."""
     lines = text.split("\n")
