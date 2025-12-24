@@ -66,19 +66,7 @@ def reset_if_needed(email):
 
     conn.commit()
     conn.close()
-# ============ USER RECORD =========
 
-def ensure_user_exists(email):
-    conn = sqlite3.connect("usage.db")
-    c = conn.cursor()
-    c.execute("SELECT email FROM users WHERE email=?", (email,))
-    if not c.fetchone():
-        c.execute("""
-            INSERT INTO users (email, plan, credits_remaining, monthly_allowance, last_reset)
-            VALUES (?, ?, ?, ?, ?)
-        """, (email, "monthly", 30, 30, date.today().isoformat()))
-    conn.commit()
-    conn.close()
 
 
 
@@ -88,9 +76,6 @@ def get_openai_client():
     return OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
 client = get_openai_client()
-
-ensure_user_exists(user_email)
-reset_if_needed(user_email)
 
 
 # =========================
