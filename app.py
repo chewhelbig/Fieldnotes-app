@@ -693,7 +693,7 @@ def main():
             st.warning("Please enter a session narrative first.")
             st.stop()
     
-        combined_narrative = narrative  # (or your history-augmented version)
+        combined_narrative = narrative
     
         # 1) NOTES: check credits BEFORE calling AI
         if not can_generate(user_email, COST_GENERATE_NOTES):
@@ -705,28 +705,29 @@ def main():
     
         st.session_state["notes_text"] = notes_text
         deduct_credits(user_email, COST_GENERATE_NOTES)
-
-    # 2) REFLECTION (optional): check credits BEFORE calling AI
-    if generate_reflection:
-        cost = REFLECTION_COST.get(reflection_intensity, 1)
-
-        if not can_generate(user_email, cost):
-            st.warning("Not enough credits to generate reflection. Please top up.")
+    
+        # 2) REFLECTION (optional)
+        if generate_reflection:
+            cost = REFLECTION_COST.get(reflection_intensity, 1)
+    
+            if not can_generate(user_email, cost):
+                st.warning("Not enough credits to generate reflection. Please top up.")
+                st.session_state["reflection_text"] = ""
+                st.stop()
+    
+            with st.spinner("Generating therapist reflection / supervision view..."):
+                reflection = call_reflection_engine(
+                    narrative=combined_narrative,
+                    ai_output=notes_text,
+                    client_name=client_name,
+                    intensity=reflection_intensity,
+                )
+    
+            st.session_state["reflection_text"] = reflection
+            deduct_credits(user_email, cost)
+        else:
             st.session_state["reflection_text"] = ""
-            st.stop()
 
-        with st.spinner("Generating therapist reflection / supervision view..."):
-            reflection = call_reflection_engine(
-                narrative=combined_narrative,
-                ai_output=notes_text,
-                client_name=client_name,
-                intensity=reflection_intensity,
-            )
-
-        st.session_state["reflection_text"] = reflection
-        deduct_credits(user_email, cost)
-    else:
-        st.session_state["reflection_text"] = ""
 
     
     # ALWAYS read from session_state (survives reruns + downloads)
