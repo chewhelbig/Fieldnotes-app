@@ -231,15 +231,7 @@ def contact_cycle_table_to_text(table_lines: list[str]) -> str:
 
 def create_pdf_from_text(content: str) -> bytes:
     """Create a simple, readable PDF from the AI text."""
-    safe_content = (
-        (content or "")
-        .replace("’", "'")
-        .replace("‘", "'")
-        .replace("“", '"')
-        .replace("”", '"')
-        .replace("–", "-")
-        .replace("—", "-")
-    )
+    safe_content = to_latin1_safe(content or "")
 
     lines = safe_content.split("\n")
     new_lines: list[str] = []
@@ -259,7 +251,7 @@ def create_pdf_from_text(content: str) -> bytes:
             new_lines.append(lines[i])
             i += 1
 
-    safe_content = "\n".join(new_lines)
+    safe_content = to_latin1_safe(content or "")
 
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -309,7 +301,7 @@ def create_pdf_from_text(content: str) -> bytes:
 
     # pyfpdf returns str; Streamlit needs bytes
     if isinstance(pdf_out, str):
-        pdf_out = pdf_out.encode("latin-1", errors="ignore")
+        pdf_out = pdf_out.encode("latin-1")
 
     if isinstance(pdf_out, bytearray):
         pdf_out = bytes(pdf_out)
