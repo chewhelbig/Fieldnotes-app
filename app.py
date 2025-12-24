@@ -102,12 +102,6 @@ def call_openai(combined_narrative: str, client_name: str, output_mode: str) -> 
     return response.choices[0].message.content
 
 
-    except Exception as e:
-        st.error("⚠️ There was a problem contacting the AI model.")
-        st.caption("Technical details: " + repr(e))
-        return "Error: The AI could not generate output. Please try again."
-
-
 def call_reflection_engine(narrative: str, ai_output: str, client_name: str, intensity: str) -> str:
     client = get_openai_client()
     if client is None:
@@ -131,11 +125,6 @@ def call_reflection_engine(narrative: str, ai_output: str, client_name: str, int
     )
     return response.choices[0].message.content.strip()
 
-
-    except Exception as e:
-        st.error("⚠️ There was a problem contacting the AI model.")
-        st.caption("Technical details: " + repr(e))
-        return "Error: The AI could not generate reflection output. Please try again."
 
 
 # =========================
