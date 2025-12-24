@@ -554,7 +554,6 @@ def main():
         "FieldNotes is a Gestalt-informed AI companion to help therapists turn a quick narrative into "
         "clear session notes and supervision material.\n\n"
         "**Hosted download-only mode:** This site does **not** store your notes on the server. "
-        "Your text is sent to the OpenAI API to generate output, then displayed here. "
         "Use the download buttons to save to your own device."
     )
 
