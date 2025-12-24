@@ -631,34 +631,44 @@ def main():
             value=False,
             help="Uses the session narrative + generated notes to create a supervision-style reflection just for you.",
         )
+        
+        if generate_reflection:
+            reflection_intensity = st.selectbox(
+                "Reflection intensity",
+                options=["Basic", "Deep", "Very deep"],
+                index=1,
+            )
+        else:
+            reflection_intensity = "Deep"
 
+        combined_narrative = narrative
+
+        with st.spinner("Generating clinical notes..."):
+            notes_text = call_openai(combined_narrative, client_name, output_mode)
+        st.session_state["notes_text"] = notes_text
+        deduct_credits(user_email, COST_GENERATE_NOTES)
+        
         if generate_reflection:
             cost = REFLECTION_COST.get(reflection_intensity, 1)
         
-            # Ensure user exists + reset monthly if needed (do this earlier once per run)
-            # ensure_user_exists(user_email)
-            # reset_if_needed(user_email)
-        
             if not can_generate(user_email, cost):
-                st.warning(
-                    "You don’t have enough AI credits to generate a reflection.\n\n"
-                    "Top up to continue, or wait for your monthly reset."
-                )
+                st.warning("Not enough credits to generate reflection. Please top up.")
                 st.session_state["reflection_text"] = ""
                 st.stop()
         
             with st.spinner("Generating therapist reflection / supervision view..."):
-                st.session_state["reflection_text"] = call_reflection_engine(
+                reflection = call_reflection_engine(
                     narrative=combined_narrative,
-                    ai_output=st.session_state["notes_text"],
+                    ai_output=notes_text,
                     client_name=client_name,
                     intensity=reflection_intensity,
                 )
-        
+            st.session_state["reflection_text"] = reflection
             deduct_credits(user_email, cost)
-        
         else:
             st.session_state["reflection_text"] = ""
+
+
 
 
         st.markdown("---")
@@ -729,7 +739,12 @@ def main():
             st.stop()
     
         with st.spinner("Generating clinical notes..."):
-            ai_output = call_openai(...)
+            notes_text = call_openai(
+                combined_narrative,
+                client_name,
+                output_mode
+            )
+
     
         deduct_credits(user_email, COST_GENERATE_NOTES)
 
