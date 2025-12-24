@@ -687,36 +687,41 @@ def main():
 
     # ===== Generate button (main area) =====
     if st.button("Generate structured output", disabled=not email_ok):
+    
         if not email_ok:
             st.warning("Please enter your email in the sidebar to continue.")
             st.stop()
-
+    
         if not narrative.strip():
             st.warning("Please enter a session narrative first.")
             st.stop()
-
+    
         combined_narrative = narrative
-
-        # 1) NOTES: check credits BEFORE calling AI
+    
+        # 1) NOTES — check credits first
         if not can_generate(user_email, COST_GENERATE_NOTES):
             st.warning("Not enough credits to generate notes. Please top up.")
             st.stop()
-
+    
         with st.spinner("Generating clinical notes..."):
-            notes_text = call_openai(combined_narrative, client_name, output_mode)
-
+            notes_text = call_openai(
+                combined_narrative,
+                client_name,
+                output_mode
+            )
+    
         st.session_state["notes_text"] = notes_text
         deduct_credits(user_email, COST_GENERATE_NOTES)
-
+        st.session_state["gen_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    
         # 2) REFLECTION (optional)
         if generate_reflection:
             cost = REFLECTION_COST.get(reflection_intensity, 1)
-
+    
             if not can_generate(user_email, cost):
                 st.warning("Not enough credits to generate reflection. Please top up.")
-                st.session_state["reflection_text"] = ""
                 st.stop()
-
+    
             with st.spinner("Generating therapist reflection / supervision view..."):
                 reflection = call_reflection_engine(
                     narrative=combined_narrative,
@@ -724,11 +729,12 @@ def main():
                     client_name=client_name,
                     intensity=reflection_intensity,
                 )
-
+    
             st.session_state["reflection_text"] = reflection
             deduct_credits(user_email, cost)
         else:
             st.session_state["reflection_text"] = ""
+
 
     # ALWAYS read from session_state (survives reruns + downloads)
     notes_text = st.session_state["notes_text"]
