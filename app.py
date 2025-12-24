@@ -605,18 +605,18 @@ def main():
     
     email_ok = bool(user_email)
     
-    if not email_ok:
-        st.sidebar.info("Enter your email to enable credits & downloads.")
-    else:
+        if not email_ok:
+            st.sidebar.info("Enter your email to enable credits & downloads.")
+        else:
+            st.session_state["user_email"] = user_email
+            ensure_user_exists(user_email)
+            reset_if_needed(user_email)
+    
+    
+        
         st.session_state["user_email"] = user_email
         ensure_user_exists(user_email)
         reset_if_needed(user_email)
-
-
-    
-    st.session_state["user_email"] = user_email
-    ensure_user_exists(user_email)
-    reset_if_needed(user_email)
     
    # ---- sidebar settings ----
     st.sidebar.header("Settings")
