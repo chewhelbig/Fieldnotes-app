@@ -10,6 +10,8 @@ import streamlit.components.v1 as components
 import sqlite3
 from datetime import date
 
+st.write("OPENAI_API_KEY present:", "OPENAI_API_KEY" in os.environ)
+
 def init_db():
     conn = sqlite3.connect("usage.db")
     c = conn.cursor()
