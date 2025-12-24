@@ -695,13 +695,13 @@ def main():
         mime="text/plain",
     )
 
+    if st.button("Generate structured output", disabled=not email_ok):
+    # safety: in case of weird rerun edge cases
+    if not email_ok:
+        st.warning("Please enter your email in the sidebar to continue.")
+        st.stop()
     
-    if st.button("Generate structured output"):
-        if not narrative.strip():
-            st.warning("Please enter a session narrative first.")
-            st.stop()
     
-        combined_narrative = narrative
     
         # 1) NOTES: check credits BEFORE calling AI
         if not can_generate(user_email, COST_GENERATE_NOTES):
