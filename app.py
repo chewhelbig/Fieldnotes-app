@@ -2,14 +2,17 @@ import os
 import io
 import re
 from datetime import datetime
-
 import streamlit as st
 from openai import OpenAI
 from fpdf import FPDF
 import streamlit.components.v1 as components
 
+# ------Get OPEN AI------------
+@st.cache_resource
+def get_openai_client():
+    return OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
-
+client = get_openai_client()
 
 
 # =========================
