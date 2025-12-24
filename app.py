@@ -645,6 +645,24 @@ def call_reflection_engine(
 # =========================
 def main():
     st.set_page_config(page_title="FieldNotes for Therapists", layout="centered")
+
+     # ---- CSS (put it HERE) ----
+    st.markdown("""
+    <style>
+    div.stDownloadButton > button {
+        background: none;
+        color: #3366cc;
+        padding: 0;
+        border: none;
+        text-decoration: underline;
+        font-size: 0.9rem;
+    }
+    div.stDownloadButton > button:hover {
+        color: #003366;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    # ---- end CSS ----
     
     if "gen_timestamp" not in st.session_state:
         st.session_state["gen_timestamp"] = ""
@@ -727,14 +745,15 @@ def main():
         placeholder="Write your session details here...",
     )
     
-    st.markdown("#### Save draft")
+    st.markdown("**Save draft**")
+    
     st.download_button(
-        "⬇️ Download draft (txt)",
+        label="save draft (.txt)",
         data=(narrative or ""),
         file_name="fieldnotes_draft.txt",
         mime="text/plain",
-        help="Download a copy of what you typed so far in case the page refreshes or disconnects.",
     )
+
     
     if st.button("Generate structured output"):
         if not narrative.strip():
