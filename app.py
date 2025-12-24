@@ -7,7 +7,7 @@ import streamlit as st
 from openai import OpenAI
 from fpdf import FPDF
 import streamlit.components.v1 as components
-from streamlit_local_storage import LocalStorage
+
 
 
 
@@ -20,96 +20,6 @@ APP_VERSION = "0.2-hosted-download-only"
 OPENAI_MODEL_NOTES = "gpt-4.1-mini"
 OPENAI_MODEL_REFLECTION = "gpt-4.1-mini"
 MAX_TOKENS_REFLECTION = 2300
-
-LOCALSTORAGE_KEY_NAME = "fieldnotes_openai_api_key_v1"
-
-
-LOCALSTORAGE_KEY_NAME = "fieldnotes_openai_api_key_v1"
-
-def get_openai_client_or_none():
-    """
-    Return an OpenAI client if the user has entered and confirmed an API key.
-    Otherwise return None.
-    """
-    key = (st.session_state.get("user_openai_key") or "").strip()
-
-    if not key:
-        return None
-
-    if not st.session_state.get("openai_key_confirmed"):
-        return None
-
-    try:
-        return OpenAI(api_key=key)
-    except Exception:
-        return None
-
-
-def sidebar_openai_key_ui() -> None:
-    if "user_openai_key" not in st.session_state:
-        st.session_state["user_openai_key"] = ""
-
-    if "openai_key_confirmed" not in st.session_state:
-        st.session_state["openai_key_confirmed"] = False
-
-    if "remember_key" not in st.session_state:
-        st.session_state["remember_key"] = True  # default on for UX
-
-    localS = LocalStorage()
-
-    restored = localS.getItem(LOCALSTORAGE_KEY_NAME)
-    if isinstance(restored, str) and restored.startswith("sk-") and not st.session_state.get("user_openai_key"):
-        st.session_state["user_openai_key"] = restored
-        # keep confirmed False until user clicks Enter key
-
-
-    with st.sidebar:
-        st.markdown("### 🔑 OpenAI API key")
-
-        with st.expander("Where do I get this key? (2 minutes)", expanded=False):
-            st.markdown(
-                """
-FieldNotes uses OpenAI’s models to generate notes.  
-You use your own OpenAI account, and OpenAI bills you directly (usually cents per session).  
-This app does not store your notes on the server.
-
-**Steps**
-1) Open the OpenAI platform website and sign in: https://platform.openai.com/api-keys  
-2) Go to **API keys**  
-3) Create a new secret key  
-4) Paste it here
-                """.strip()
-            )
-
-        # Always keep as string (prevents widget crashes)
-        st.session_state["user_openai_key"] = str(st.session_state.get("user_openai_key") or "")
-
-        st.text_input(
-            "Paste your OpenAI API key",
-            type="password",
-            key="user_openai_key",
-            placeholder="sk-...",
-        )
-
-        st.checkbox(
-            "Remember on this device",
-            key="remember_key",
-            help="Stores the key in your browser only (localStorage). Turn off on shared computers.",
-        )
-
-        if st.button("Enter key"):
-            key = (st.session_state.get("user_openai_key") or "").strip()
-            if not key:
-                st.session_state["openai_key_confirmed"] = False
-                st.warning("Please paste your OpenAI API key first.")
-            else:
-                st.session_state["openai_key_confirmed"] = True
-                if st.session_state.get("remember_key"):
-                    localS.setItem(LOCALSTORAGE_KEY_NAME, key)
-                st.success("✅ Key saved.")
-
-        st.caption("✅ Ready" if st.session_state.get("openai_key_confirmed") else "Enter key to enable AI features")
-
 
 
 
@@ -566,77 +476,6 @@ Respond in a supervisor-style reflective tone, grounded in Gestalt field theory.
 """
 
 
-# =========================
-# OpenAI call helpers
-# =========================
-def call_openai(narrative: str, client_name: str, output_mode: str) -> str:
-    narrative = normalize_text(narrative)
-    client_name = normalize_text(client_name)
-    output_mode = normalize_text(output_mode)
-
-    user_prompt = build_prompt(narrative, client_name, output_mode)
-
-    try:
-        client = get_openai_client_or_none()
-        if client is None:
-            st.error("Please enter your OpenAI API key in the sidebar to use AI features.")
-            st.stop()
-
-        response = client.chat.completions.create(
-            model=OPENAI_MODEL_NOTES,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-        )
-        return response.choices[0].message.content
-
-    except Exception as e:
-        st.error("⚠️ There was a problem contacting the AI model.")
-        st.caption("Technical details: " + repr(e))
-        return "Error: The AI could not generate output. Please try again."
-
-
-
-def call_reflection_engine(
-    narrative: str,
-    ai_output: str,
-    client_name: str,
-    intensity: str,
-) -> str:
-    narrative = normalize_text(narrative)
-    ai_output = normalize_text(ai_output)
-    client_name = normalize_text(client_name)
-    intensity = normalize_text(intensity)
-
-    user_prompt = build_reflection_prompt(
-        narrative=narrative,
-        ai_output=ai_output,
-        client_name=client_name,
-        intensity=intensity,
-    )
-
-    try:
-        client = get_openai_client_or_none()
-        if client is None:
-            st.error("Please enter your OpenAI API key in the sidebar to use AI features.")
-            st.stop()
-
-        response = client.chat.completions.create(
-            model=OPENAI_MODEL_REFLECTION,
-            messages=[
-                {"role": "system", "content": REFLECTION_SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.4,
-            max_tokens=MAX_TOKENS_REFLECTION,
-        )
-        return response.choices[0].message.content.strip()
-
-    except Exception as e:
-        st.error("⚠️ There was a problem contacting the AI model.")
-        st.caption("Technical details: " + repr(e))
-        return "Error: The AI could not generate reflection output. Please try again."
 
 
 
