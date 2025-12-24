@@ -755,7 +755,7 @@ def main():
     )
 
     
-    if st.button("Generate structured output"):
+    if st.button("⚙️ Generate structured output"):
         if not narrative.strip():
             st.warning("Please enter a session narrative first.")
             st.stop()
