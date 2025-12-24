@@ -183,7 +183,8 @@ def contact_cycle_table_to_text(table_lines: list[str]) -> str:
 def create_pdf_from_text(content: str) -> bytes:
     """Create a simple, readable PDF from the AI text."""
     safe_content = (
-        content.replace("’", "'")
+        (content or "")
+        .replace("’", "'")
         .replace("‘", "'")
         .replace("“", '"')
         .replace("”", '"')
@@ -220,52 +221,52 @@ def create_pdf_from_text(content: str) -> bytes:
 
     for line in safe_content.split("\n"):
         line = line.rstrip()
-    
+
         # Blank line spacing
         if not line.strip():
             pdf.ln(4)
             continue
-    
+
         # Remove simple markdown bold
         line = line.replace("**", "")
-    
-        # Optional: make headings look nicer
+
+        # Headings
         if line.startswith("### "):
             pdf.set_font("Arial", "B", 12)
             pdf.multi_cell(page_width, 7, line.replace("### ", ""))
             pdf.set_font("Arial", "", 11)
             pdf.ln(1)
             continue
-    
+
         if line.startswith("## "):
             pdf.set_font("Arial", "B", 13)
             pdf.multi_cell(page_width, 8, line.replace("## ", ""))
             pdf.set_font("Arial", "", 11)
             pdf.ln(2)
             continue
-    
+
         if line.startswith("# "):
             pdf.set_font("Arial", "B", 14)
             pdf.multi_cell(page_width, 9, line.replace("# ", ""))
             pdf.set_font("Arial", "", 11)
             pdf.ln(3)
             continue
-    
+
         # Normal line
         pdf.multi_cell(page_width, 6, line)
 
+    # IMPORTANT: output AFTER the loop
+    pdf_out = pdf.output(dest="S")
 
-        pdf_out = pdf.output(dest="S")
+    # pyfpdf returns str; Streamlit needs bytes
+    if isinstance(pdf_out, str):
+        pdf_out = pdf_out.encode("latin-1", errors="ignore")
 
-        # fpdf (pyfpdf) often returns a *str* here; Streamlit needs bytes
-        if isinstance(pdf_out, str):
-            pdf_out = pdf_out.encode("latin-1", errors="ignore")
-    
-        # fpdf2 may return bytearray
-        if isinstance(pdf_out, bytearray):
-            pdf_out = bytes(pdf_out)
-    
-        return pdf_out
+    if isinstance(pdf_out, bytearray):
+        pdf_out = bytes(pdf_out)
+
+    return pdf_out
+
 
 
 
