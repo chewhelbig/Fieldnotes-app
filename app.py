@@ -630,17 +630,17 @@ def main():
         reflection_intensity = "Deep"
 
 
-        st.markdown("---")
-        st.subheader("Hosted mode: download-only")
-        st.caption("No notes are stored on this server. Use Download to save files to your device.")
+    st.markdown("---")
+    st.subheader("Hosted mode: download-only")
+    st.caption("No notes are stored on this server. Use Download to save files to your device.")
 
-        st.markdown("---")
-        st.subheader("About")
-        st.caption(f"FieldNotes for Therapists · v{APP_VERSION}")
-        st.caption("Created by Nicole Chew-Helbig, Gestalt psychotherapist")
-        st.caption(
-            "These notes are generated to support your clinical thinking and are not a "
-            "substitute for your professional judgment or supervision."
+    st.markdown("---")
+    st.subheader("About")
+    st.caption(f"FieldNotes for Therapists · v{APP_VERSION}")
+    st.caption("Created by Nicole Chew-Helbig, Gestalt psychotherapist")
+    st.caption(
+        "These notes are generated to support your clinical thinking and are not a "
+        "substitute for your professional judgment or supervision."
         )
 
     # Main content
