@@ -73,9 +73,13 @@ def reset_if_needed(email):
 # ------Get OPEN AI------------
 @st.cache_resource
 def get_openai_client():
-    return OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-
-client = get_openai_client()
+    key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not key:
+        return None
+    return OpenAI(api_key=key)
+    client = get_openai_client()
+    if client is None:
+        st.sidebar.error("Server is missing OPENAI_API_KEY (Render env var).")
 
 # =========================
 # OpenAI call helpers
