@@ -870,6 +870,8 @@ def main():
                     "Tick the reflection option in the sidebar if you want one next time."
                 )
 
+    st.write("OpenAI client ready:", get_openai_client() is not None)
+
     st.caption(f"FieldNotes for Therapists · v{APP_VERSION} · Created by Nicole Chew-Helbig")
 
 if __name__ == "__main__":
