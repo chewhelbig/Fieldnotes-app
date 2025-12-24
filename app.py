@@ -745,7 +745,7 @@ def main():
         placeholder="Write your session details here...",
     )
     
-    st.markdown("**Save draft**")
+
     
     st.download_button(
         label="save draft (.txt)",
