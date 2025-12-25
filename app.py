@@ -10,6 +10,7 @@ import streamlit.components.v1 as components
 import sqlite3
 from datetime import date
 
+    
 
 def init_db():
     conn = sqlite3.connect("usage.db")
@@ -67,7 +68,22 @@ def reset_if_needed(email):
     conn.commit()
     conn.close()
 
+# ============PASSWORD================
+def require_app_password():
+    pwd = os.environ.get("APP_ACCESS_PASSWORD")
+    if not pwd:
+        return  # if not set, don't block (or you can block-by-default)
+    if st.session_state.get("access_ok"):
+        return
 
+    st.title("FieldNotes")
+    with st.form("login"):
+        entered = st.text_input("Enter access password", type="password")
+        ok = st.form_submit_button("Enter")
+    if ok and entered == pwd:
+        st.session_state["access_ok"] = True
+        st.rerun()
+    st.stop()
 
 
 # ------Get OPEN AI------------
@@ -621,12 +637,13 @@ def ensure_user_exists(email: str):
         """, (email, "monthly", 30, 30, date.today().isoformat()))
     conn.commit()
     conn.close()
-
-
+# =====================
+# =======UI============
 def main():
-    st.set_page_config(page_title="FieldNotes for Therapists", layout="centered")
 
-   
+    require_app_password()
+
+    st.set_page_config(page_title="FieldNotes for Therapists", layout="centered")
 
     if "gen_timestamp" not in st.session_state:
         st.session_state["gen_timestamp"] = ""
