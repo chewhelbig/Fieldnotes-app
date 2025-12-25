@@ -828,7 +828,7 @@ def main():
                 st.warning("No notes to export yet — generate notes first.")
 
         with reflection_tab:
-            st.markdown("###🧑🏼‍🦳 Therapist reflection / supervision view")
+            st.markdown("### 🧑🏼‍🦳 Therapist reflection / supervision view")
 
             if reflection_text.strip():
                 st.markdown(
