@@ -178,15 +178,44 @@ def to_latin1_safe(s: str) -> str:
     return s.encode("latin-1", errors="ignore").decode("latin-1")
 
 
-def remove_markdown_tables(text: str) -> str:
-    """Remove any Markdown table (lines starting with '|') from plain text output."""
+def convert_contact_cycle_table_to_prose(text: str) -> str:
     lines = text.split("\n")
-    cleaned_lines = []
-    for line in lines:
-        if line.strip().startswith("|"):
-            continue
-        cleaned_lines.append(line)
-    return "\n".join(cleaned_lines)
+    out = []
+    i = 0
+
+    while i < len(lines):
+        line = lines[i].strip()
+
+        # Detect start of Gestalt Contact Cycle table
+        if line.startswith("|") and "Phase of Contact Cycle" in line:
+            # Collect table lines
+            table_lines = []
+            while i < len(lines) and lines[i].strip().startswith("|"):
+                table_lines.append(lines[i].strip())
+                i += 1
+
+            out.append("GESTALT CONTACT CYCLE ROADMAP\n")
+
+            # Skip header + separator
+            for row in table_lines[2:]:
+                cells = [c.strip() for c in row.split("|")[1:-1]]
+                if len(cells) != 4:
+                    continue
+
+                phase, what, indicators, opportunities = cells
+
+                out.append(f"{phase}")
+                out.append(f"- What happened in this phase:\n  {what}")
+                out.append(f"- Indicators / clues:\n  {indicators}")
+                out.append(f"- Opportunities for next time:\n  {opportunities}")
+                out.append("")
+
+        else:
+            out.append(lines[i])
+            i += 1
+
+    return "\n".join(out).strip()
+
 
 
 def contact_cycle_table_to_text(table_lines: list[str]) -> str:
@@ -813,13 +842,17 @@ def main():
                 "Download to keep a local copy."
             )
 
-            clean_txt = remove_markdown_tables(notes_text)
+            clean_txt = convert_contact_cycle_table_to_prose(notes_text)
+
             st.download_button(
                 label="💾 Download notes as .txt",
                 data=clean_txt,
                 file_name=f"{safe_name}_{timestamp}_notes.txt",
                 mime="text/plain",
             )
+
+            pdf_source = convert_contact_cycle_table_to_prose(notes_text)
+            pdf_bytes = create_pdf_from_text(pdf_source)
 
             if notes_text.strip():
                 pdf_bytes = create_pdf_from_text(notes_text)
