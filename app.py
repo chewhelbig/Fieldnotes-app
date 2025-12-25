@@ -851,17 +851,17 @@ def main():
                 mime="text/plain",
             )
 
-            pdf_source = convert_contact_cycle_table_to_prose(notes_text)
-            pdf_bytes = create_pdf_from_text(pdf_source)
-
             if notes_text.strip():
-                pdf_bytes = create_pdf_from_text(notes_text)
+                pdf_source = convert_contact_cycle_table_to_prose(notes_text)
+                pdf_bytes = create_pdf_from_text(pdf_source)
+            
                 st.download_button(
                     label="📄 Download notes as PDF",
                     data=pdf_bytes,
                     file_name=f"{safe_name}_{timestamp}_notes.pdf",
                     mime="application/pdf",
                 )
+
             else:
                 st.warning("No notes to export yet — generate notes first.")
 
