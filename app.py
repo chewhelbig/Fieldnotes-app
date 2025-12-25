@@ -259,27 +259,7 @@ def contact_cycle_table_to_text(table_lines: list[str]) -> str:
 
 
 def create_pdf_from_text(content: str) -> bytes:
-    """Create a simple, readable PDF from the AI text."""
-    safe_content = to_latin1_safe(content or "")
-
-    lines = safe_content.split("\n")
-    new_lines: list[str] = []
-    i = 0
-    while i < len(lines):
-        stripped = lines[i].strip()
-        if stripped.startswith("|") and "Phase of Contact Cycle" in stripped:
-            table_lines = []
-            while i < len(lines) and lines[i].strip().startswith("|"):
-                table_lines.append(lines[i].strip())
-                i += 1
-            table_text = contact_cycle_table_to_text(table_lines)
-            if table_text:
-                new_lines.append(table_text)
-                new_lines.append("")
-        else:
-            new_lines.append(lines[i])
-            i += 1
-
+    """Create a simple, readable PDF from plain text (latin-1 safe for FPDF)."""
     safe_content = to_latin1_safe(content or "")
 
     pdf = FPDF()
@@ -292,7 +272,6 @@ def create_pdf_from_text(content: str) -> bytes:
     for line in safe_content.split("\n"):
         line = line.rstrip()
 
-        # Blank line spacing
         if not line.strip():
             pdf.ln(4)
             continue
@@ -322,20 +301,19 @@ def create_pdf_from_text(content: str) -> bytes:
             pdf.ln(3)
             continue
 
-        # Normal line
         pdf.multi_cell(page_width, 6, line)
 
-    # IMPORTANT: output AFTER the loop
     pdf_out = pdf.output(dest="S")
 
-    # pyfpdf returns str; Streamlit needs bytes
+    # FPDF returns str; Streamlit needs bytes
     if isinstance(pdf_out, str):
-        pdf_out = pdf_out.encode("latin-1")
+        pdf_out = pdf_out.encode("latin-1", errors="ignore")
 
     if isinstance(pdf_out, bytearray):
         pdf_out = bytes(pdf_out)
 
     return pdf_out
+
 
 
 
