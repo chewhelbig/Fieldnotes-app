@@ -723,6 +723,7 @@ def main():
         data=(narrative or ""),
         file_name="fieldnotes_draft.txt",
         mime="text/plain",
+        key="dl_draft_txt"
     )
 
     # ===== Generate button (main area) =====
@@ -808,6 +809,7 @@ def main():
                 data=clean_txt,
                 file_name=f"{safe_name}_{timestamp}_notes.txt",
                 mime="text/plain",
+                key="dl_notes_txt",
             )
 
             if notes_text.strip():
@@ -819,7 +821,7 @@ def main():
                     data=pdf_bytes,
                     file_name=f"{safe_name}_{timestamp}_notes.pdf",
                     mime="application/pdf",
-                    key="download_notes_pdf",
+                    key="dl_notes_pdf",
                 )
 
             else:
@@ -840,6 +842,7 @@ def main():
                     data=reflection_text,
                     file_name=f"{safe_name}_{timestamp}_reflection.txt",
                     mime="text/plain",
+                    key="dl_reflection_txt",
                 )
 
                 reflection_pdf = create_pdf_from_text(reflection_text)
@@ -848,6 +851,7 @@ def main():
                     data=reflection_pdf,
                     file_name=f"{safe_name}_{timestamp}_reflection.pdf",
                     mime="application/pdf",
+                    key="dl_reflection_pdf",
                 )
             else:
                 st.write(
