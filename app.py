@@ -276,10 +276,8 @@ def create_pdf_from_text(content: str) -> bytes:
             pdf.ln(4)
             continue
 
-        # Remove simple markdown bold
         line = line.replace("**", "")
 
-        # Headings
         if line.startswith("### "):
             pdf.set_font("Arial", "B", 12)
             pdf.multi_cell(page_width, 7, line.replace("### ", ""))
@@ -305,14 +303,13 @@ def create_pdf_from_text(content: str) -> bytes:
 
     pdf_out = pdf.output(dest="S")
 
-    # FPDF returns str; Streamlit needs bytes
     if isinstance(pdf_out, str):
         pdf_out = pdf_out.encode("latin-1", errors="ignore")
-
     if isinstance(pdf_out, bytearray):
         pdf_out = bytes(pdf_out)
 
     return pdf_out
+
 
 
 
@@ -838,6 +835,7 @@ def main():
                     data=pdf_bytes,
                     file_name=f"{safe_name}_{timestamp}_notes.pdf",
                     mime="application/pdf",
+                    key="download_notes_pdf",
                 )
 
             else:
