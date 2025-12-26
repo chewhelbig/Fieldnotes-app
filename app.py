@@ -10,7 +10,22 @@ import streamlit.components.v1 as components
 import sqlite3
 from datetime import date
 
-    
+
+# --- Admin access (Stage 2) ---
+def get_admin_emails() -> set[str]:
+    """
+    Comma-separated list in Render env var FIELDNOTES_ADMIN_EMAILS
+    e.g. "nicole@psychotherapist.sg,nicole@nikhelbig.at"
+    """
+    raw = os.environ.get("FIELDNOTES_ADMIN_EMAILS", "").strip()
+    if not raw:
+        return set()
+    return {e.strip().lower() for e in raw.split(",") if e.strip()}
+
+ADMIN_EMAILS = get_admin_emails()
+
+def is_admin(email: str) -> bool:
+    return bool(email) and email.strip().lower() in ADMIN_EMAILS
 
 def init_db():
     conn = sqlite3.connect("usage.db")
