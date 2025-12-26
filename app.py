@@ -665,6 +665,18 @@ def main():
         ensure_user_exists(user_email)
         reset_if_needed(user_email)
 
+        # ---- usage explanation ----
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("Usage")
+    
+        with st.sidebar.expander("What is 1 generation?"):
+            st.markdown(
+                "- **1 generation = 1 click on “Generate structured output”.**\n"
+                "- Includes clinical notes and reflection (if enabled).\n"
+                "- Regenerating counts as a new generation.\n"
+                "- A generation is an AI output, not a therapy session."
+            )
+
     # ---- sidebar settings ----
     st.sidebar.header("Settings")
     output_mode = st.sidebar.radio("Output detail level", ["Short", "Full"], index=1)
