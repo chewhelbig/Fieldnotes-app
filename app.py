@@ -15,7 +15,7 @@ from datetime import date
 def get_admin_emails() -> set[str]:
     """
     Comma-separated list in Render env var FIELDNOTES_ADMIN_EMAILS
-    e.g. "nicole@psychotherapist.sg,nicole@nikhelbig.at"
+    e.g. "nikhelbig@gmail.com"
     """
     raw = os.environ.get("FIELDNOTES_ADMIN_EMAILS", "").strip()
     if not raw:
