@@ -92,7 +92,7 @@ def require_app_password():
         return
 
     st.title("FieldNotes")
-        with st.form("access_form"):
+    with st.form("access_form"):
         # Dummy hidden field to stop browser password managers
         st.text_input(
             "Username",
