@@ -92,9 +92,23 @@ def require_app_password():
         return
 
     st.title("FieldNotes")
-    with st.form("login"):
-        entered = st.text_input("Enter access password", type="password")
-        ok = st.form_submit_button("Enter")
+    with st.form("access_form"):
+    # Dummy hidden field to stop browser password managers
+    st.text_input(
+        "Username",
+        value="",
+        key="__dummy_user",
+        label_visibility="collapsed"
+    )
+
+    entered = st.text_input(
+        "Enter access password",
+        type="password",
+        key="access_password"
+    )
+
+    ok = st.form_submit_button("Enter")
+
     if ok and entered == pwd:
         st.session_state["access_ok"] = True
         st.rerun()
@@ -655,13 +669,44 @@ def ensure_user_exists(email: str):
 # =====================
 # =======UI============
 def main():
-
-    require_app_password()
-
-    st.set_page_config(page_title="FieldNotes for Therapists", layout="centered")
-
-    if "gen_timestamp" not in st.session_state:
-        st.session_state["gen_timestamp"] = ""
+    def require_app_password():
+        pwd = os.environ.get("APP_ACCESS_PASSWORD")
+    
+        if not pwd:
+            return  # no password set → app open (intentional)
+    
+        if st.session_state.get("access_ok"):
+            return
+    
+        st.title("FieldNotes")
+    
+        with st.form("access_form", clear_on_submit=False):
+            # Dummy field to reduce browser password popups
+            st.text_input(
+                "Username",
+                value="",
+                key="__dummy_user",
+                label_visibility="collapsed"
+            )
+    
+            entered = st.text_input(
+                "Enter access password",
+                type="password",
+                key="access_password"
+            )
+    
+            submitted = st.form_submit_button("Enter")
+    
+        if submitted:
+            if entered == pwd:
+                st.session_state["access_ok"] = True
+                st.rerun()
+            else:
+                st.error("Incorrect password")
+    
+        st.stop()
+    
+        
 
     # ========= Sidebar: account ===========
     st.sidebar.markdown("### 👤 Account")
