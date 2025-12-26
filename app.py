@@ -92,22 +92,22 @@ def require_app_password():
         return
 
     st.title("FieldNotes")
-with st.form("access_form"):
-    # Dummy hidden field to stop browser password managers
-    st.text_input(
-        "Username",
-        value="",
-        key="__dummy_user",
-        label_visibility="collapsed"
-    )
-
-    entered = st.text_input(
-        "Enter access password",
-        type="password",
-        key="access_password"
-    )
-
-    ok = st.form_submit_button("Enter")
+    with st.form("access_form"):
+        # Dummy hidden field to stop browser password managers
+        st.text_input(
+            "Username",
+            value="",
+            key="__dummy_user",
+            label_visibility="collapsed"
+        )
+    
+        entered = st.text_input(
+            "Enter access password",
+            type="password",
+            key="access_password"
+        )
+    
+        ok = st.form_submit_button("Enter")
 
     if ok and entered == pwd:
         st.session_state["access_ok"] = True
