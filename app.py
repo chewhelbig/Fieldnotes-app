@@ -86,33 +86,41 @@ def reset_if_needed(email):
 # ============PASSWORD================
 def require_app_password():
     pwd = os.environ.get("APP_ACCESS_PASSWORD")
+
     if not pwd:
-        return  # if not set, don't block (or you can block-by-default)
+        return  # no password set → app open
+
     if st.session_state.get("access_ok"):
         return
 
     st.title("FieldNotes")
-    with st.form("access_form"):
-        # Dummy hidden field to stop browser password managers
+
+    with st.form("access_form", clear_on_submit=False):
+        # Dummy field to reduce browser password popups
         st.text_input(
             "Username",
             value="",
             key="__dummy_user",
             label_visibility="collapsed"
         )
-    
+
         entered = st.text_input(
             "Enter access password",
             type="password",
             key="access_password"
         )
-    
-        ok = st.form_submit_button("Enter")
 
-    if ok and entered == pwd:
-        st.session_state["access_ok"] = True
-        st.rerun()
+        submitted = st.form_submit_button("Enter")
+
+    if submitted:
+        if entered == pwd:
+            st.session_state["access_ok"] = True
+            st.rerun()
+        else:
+            st.error("Incorrect password")
+
     st.stop()
+
 
 
 # ------Get OPEN AI------------
@@ -669,43 +677,7 @@ def ensure_user_exists(email: str):
 # =====================
 # =======UI============
 def main():
-def require_app_password():
-    pwd = os.environ.get("APP_ACCESS_PASSWORD")
-
-    if not pwd:
-        return  # no password set → app open (intentional)
-
-    if st.session_state.get("access_ok"):
-        return
-
-    st.title("FieldNotes")
-
-    with st.form("access_form", clear_on_submit=False):
-        # Dummy field to reduce browser password popups
-        st.text_input(
-            "Username",
-            value="",
-            key="__dummy_user",
-            label_visibility="collapsed"
-        )
-
-        entered = st.text_input(
-            "Enter access password",
-            type="password",
-            key="access_password"
-        )
-
-        submitted = st.form_submit_button("Enter")
-
-    if submitted:
-        if entered == pwd:
-            st.session_state["access_ok"] = True
-            st.rerun()
-        else:
-            st.error("Incorrect password")
-
-    st.stop()
-    
+    require_app_password() 
         
 
     # ========= Sidebar: account ===========
