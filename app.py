@@ -305,7 +305,6 @@ MAX_TOKENS_REFLECTION = 2300
 COST_GENERATE_NOTES = 1
 REFLECTION_COST = {
     "Basic": 1,
-    "Medium": 1,
     "Deep": 2,
     "Very deep": 2,
 }
@@ -843,6 +842,10 @@ def main():
 
     # ---- sidebar info ----
     st.sidebar.markdown("---")
+    st.sidebar.header("Settings")
+    output_mode = st.sidebar.radio("Output detail level", ["Short", "Full"], index=1)
+
+    st.sidebar.markdown("---")
     st.sidebar.subheader("Hosted mode: download-only")
     st.sidebar.caption("No notes are stored on this server. Use Download to save files to your device.")
 
@@ -900,55 +903,55 @@ def main():
         mime="text/plain",
         key="dl_draft_txt"
     )
-
+    
     # ===== Generate button (main area) =====
-if st.button("Generate structured output", disabled=not email_ok):
-
-    if not email_ok:
-        st.warning("Please enter your email in the sidebar to continue.")
-        st.stop()
-
-    if not narrative.strip():
-        st.warning("Please enter a session narrative first.")
-        st.stop()
-
-    combined_narrative = narrative
-
-    # 1) NOTES — atomic deduct BEFORE calling OpenAI
-    if not pg_try_deduct_credits(user_email, COST_GENERATE_NOTES):
-        st.warning("Not enough credits to generate notes. Please top up.")
-        st.stop()
-
-    with st.spinner("Generating clinical notes..."):
-        notes_text = call_openai(
-            combined_narrative,
-            client_name,
-            output_mode
-        )
-
-    st.session_state["notes_text"] = notes_text
-    st.session_state["gen_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M")
-
-    # 2) REFLECTION (optional)
-    if generate_reflection:
-        cost = REFLECTION_COST.get(reflection_intensity, 1)
-
-        # atomic deduct BEFORE reflection call
-        if not pg_try_deduct_credits(user_email, cost):
-            st.warning("Not enough credits to generate reflection. Please top up.")
+    if st.button("Generate structured output", disabled=not email_ok):
+    
+        if not email_ok:
+            st.warning("Please enter your email in the sidebar to continue.")
             st.stop()
-
-        with st.spinner("Generating therapist reflection / supervision view..."):
-            reflection = call_reflection_engine(
-                narrative=combined_narrative,
-                ai_output=notes_text,
-                client_name=client_name,
-                intensity=reflection_intensity,
+    
+        if not narrative.strip():
+            st.warning("Please enter a session narrative first.")
+            st.stop()
+    
+        combined_narrative = narrative
+    
+        # 1) NOTES — atomic deduct BEFORE calling OpenAI
+        if not pg_try_deduct_credits(user_email, COST_GENERATE_NOTES):
+            st.warning("Not enough credits to generate notes. Please top up.")
+            st.stop()
+    
+        with st.spinner("Generating clinical notes..."):
+            notes_text = call_openai(
+                combined_narrative,
+                client_name,
+                output_mode
             )
+    
+        st.session_state["notes_text"] = notes_text
+        st.session_state["gen_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    
+        # 2) REFLECTION (optional)
+        if generate_reflection:
+            cost = REFLECTION_COST.get(reflection_intensity, 1)
+    
+            if not pg_try_deduct_credits(user_email, cost):
+                st.warning("Not enough credits to generate reflection. Please top up.")
+                st.stop()
+    
+            with st.spinner("Generating therapist reflection / supervision view..."):
+                reflection = call_reflection_engine(
+                    narrative=combined_narrative,
+                    ai_output=notes_text,
+                    client_name=client_name,
+                    intensity=reflection_intensity,
+                )
+    
+            st.session_state["reflection_text"] = reflection
+        else:
+            st.session_state["reflection_text"] = ""
 
-        st.session_state["reflection_text"] = reflection
-    else:
-        st.session_state["reflection_text"] = ""
 
 
     # ALWAYS read from session_state (survives reruns + downloads)
