@@ -777,8 +777,6 @@ Respond in a supervisor-style reflective tone, grounded in Gestalt field theory.
 def main():
     require_app_password()
     ensure_pg_schema()
-    pg_maybe_reset_monthly(user_email)
-    pg_user = pg_get_user(user_email)
 
 
     # ========= Sidebar: account ===========
@@ -800,11 +798,17 @@ def main():
     # Stage 1 gate (invite-only)
     require_allowed_email(user_email)
 
-    # Ensure user exists + read once
+   # Ensure user exists
     pg_get_or_create_user(user_email)
+    
+    # Monthly reset (runs once per app load)
+    pg_maybe_reset_monthly(user_email)
+    
+    # Read user state once
     pg_user = pg_get_user(user_email)
 
-    # ---- usage / credits display ----
+
+  
     # ---- usage / credits display ----
     if pg_user:
         credits_remaining = pg_user[2]  # credits_remaining
