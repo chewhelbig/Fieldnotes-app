@@ -9,6 +9,15 @@ import streamlit.components.v1 as components
 
 import sqlite3
 from datetime import date
+import psycopg2
+
+# ====== database ===========
+def get_pg_conn():
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        return None
+    # psycopg2 accepts the URL string directly
+    return psycopg2.connect(url)
 
 
 # --- Admin access (Stage 2) ---
