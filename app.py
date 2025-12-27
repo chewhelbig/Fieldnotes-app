@@ -43,8 +43,6 @@ def ensure_pg_schema():
     cur.close()
     conn.close()
 
-
-
 DEFAULT_MONTHLY_ALLOWANCE = 30
 
 def pg_get_or_create_user(email: str):
@@ -66,6 +64,47 @@ def pg_get_or_create_user(email: str):
     conn.close()
     return row
 
+def pg_maybe_reset_monthly(email: str):
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    cur.execute(
+        "SELECT last_reset, monthly_allowance FROM users WHERE email=%s",
+        (email,)
+    )
+    row = cur.fetchone()
+    if not row:
+        cur.close()
+        conn.close()
+        return
+
+    last_reset, allowance = row
+    if not allowance:
+        cur.close()
+        conn.close()
+        return
+
+    today = date.today()
+
+    # Reset when calendar month changes
+    if (
+        last_reset is None
+        or last_reset.year != today.year
+        or last_reset.month != today.month
+    ):
+        cur.execute(
+            """
+            UPDATE users
+            SET credits_remaining=%s,
+                last_reset=%s
+            WHERE email=%s
+            """,
+            (allowance, today, email),
+        )
+        conn.commit()
+
+    cur.close()
+    conn.close()
 
 # --- Admin access (Stage 2) ---
 def get_admin_emails() -> set[str]:
@@ -738,6 +777,9 @@ Respond in a supervisor-style reflective tone, grounded in Gestalt field theory.
 def main():
     require_app_password()
     ensure_pg_schema()
+    pg_maybe_reset_monthly(user_email)
+    pg_user = pg_get_user(user_email)
+
 
     # ========= Sidebar: account ===========
     st.sidebar.markdown("### 👤 Account")
