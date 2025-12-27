@@ -19,6 +19,31 @@ def get_pg_conn():
     # psycopg2 accepts the URL string directly
     return psycopg2.connect(url)
 
+def ensure_pg_schema():
+    conn = get_pg_conn()
+    if conn is None:
+        return  # no DATABASE_URL set, skip
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+          email TEXT PRIMARY KEY,
+          plan TEXT DEFAULT 'free',
+          credits_remaining INT DEFAULT 0,
+          monthly_allowance INT DEFAULT 0,
+          last_reset DATE,
+
+          stripe_customer_id TEXT,
+          stripe_subscription_id TEXT,
+          subscription_status TEXT,
+          current_period_end TIMESTAMPTZ,
+
+          created_at TIMESTAMPTZ DEFAULT NOW()
+        );
+    """)
+    conn.commit()
+    cur.close()
+    conn.close()
+
 
 # --- Admin access (Stage 2) ---
 def get_admin_emails() -> set[str]:
@@ -708,7 +733,7 @@ def ensure_user_exists(email: str):
 # =======UI============
 def main():
     require_app_password() 
-        
+    ensure_pg_schema()    
 
     # ========= Sidebar: account ===========
     st.sidebar.markdown("### 👤 Account")
