@@ -45,6 +45,29 @@ def ensure_pg_schema():
     conn.close()
 
 
+
+DEFAULT_MONTHLY_ALLOWANCE = 30
+
+def pg_get_or_create_user(email: str):
+    conn = get_pg_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT email, plan, credits_remaining, monthly_allowance, last_reset FROM users WHERE email=%s", (email,))
+    row = cur.fetchone()
+
+    if not row:
+        cur.execute("""
+            INSERT INTO users (email, plan, credits_remaining, monthly_allowance, last_reset)
+            VALUES (%s, 'beta', %s, %s, %s)
+        """, (email, DEFAULT_MONTHLY_ALLOWANCE, DEFAULT_MONTHLY_ALLOWANCE, date.today()))
+        conn.commit()
+        cur.execute("SELECT email, plan, credits_remaining, monthly_allowance, last_reset FROM users WHERE email=%s", (email,))
+        row = cur.fetchone()
+
+    cur.close()
+    conn.close()
+    return row
+
+
 # --- Admin access (Stage 2) ---
 def get_admin_emails() -> set[str]:
     """
