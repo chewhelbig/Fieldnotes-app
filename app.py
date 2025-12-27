@@ -776,6 +776,9 @@ Respond in a supervisor-style reflective tone, grounded in Gestalt field theory.
 def main():
     require_app_password()
     ensure_pg_schema()
+    if not os.environ.get("DATABASE_URL"):
+        st.error("Server misconfiguration: DATABASE_URL is missing (Render env var).")
+        st.stop()
 
 
     # ========= Sidebar: account ===========
@@ -797,7 +800,7 @@ def main():
     # Stage 1 gate (invite-only)
     require_allowed_email(user_email)
 
-   # Ensure user exists
+    # Ensure user exists
     pg_get_or_create_user(user_email)
     
     # Monthly reset (runs once per app load)
@@ -1036,7 +1039,6 @@ def main():
                     "Tick the reflection option in the sidebar if you want one next time."
                 )
 
-    st.write("OpenAI client ready:", get_openai_client() is not None)
 
     st.caption(f"FieldNotes for Therapists · v{APP_VERSION} · Created by Nicole Chew-Helbig")
 
