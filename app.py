@@ -734,10 +734,10 @@ Respond in a supervisor-style reflective tone, grounded in Gestalt field theory.
 """
 # ======Ensure=============
 # =====================
-# =======UI============
+# ======= UI ============
 def main():
-    require_app_password() 
-    ensure_pg_schema()    
+    require_app_password()
+    ensure_pg_schema()
 
     # ========= Sidebar: account ===========
     st.sidebar.markdown("### 👤 Account")
@@ -751,34 +751,40 @@ def main():
 
     if not email_ok:
         st.sidebar.info("Enter your email to enable credits & downloads.")
-    else:
-        st.session_state["user_email"] = user_email
-        ensure_user_exists(user_email)
-        reset_if_needed(user_email)
-        
-        pg_user = pg_get_or_create_user(user_email)  # your function from 2F
+        st.stop()
 
-        # ---- usage explanation ----
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("Usage")
+    st.session_state["user_email"] = user_email
+
+    # Stage 1 gate (invite-only)
+    require_allowed_email(user_email)
+
+    # Ensure user exists + read once
+    pg_get_or_create_user(user_email)
+    pg_user = pg_get_user(user_email)
+
+    # ---- usage / credits display ----
+    # ---- usage / credits display ----
+    if pg_user:
+        credits_remaining = pg_user[2]  # credits_remaining
+        st.sidebar.caption(f"Credits remaining: {credits_remaining}")
     
-        with st.sidebar.expander("What is 1 generation?"):
-            st.markdown(
-                "- **1 generation = 1 click on “Generate structured output”.**\n"
-                "- Includes clinical notes and reflection (if enabled).\n"
-                "- Regenerating counts as a new generation.\n"
-                "- A generation is an AI output, not a therapy session."
-            )
-
-    # ---- sidebar settings ----
-    st.sidebar.header("Settings")
-    output_mode = st.sidebar.radio("Output detail level", ["Short", "Full"], index=1)
-
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Usage")
+    
+    with st.sidebar.expander("What is 1 generation?"):
+        st.markdown(
+            "- **1 generation = 1 click on “Generate structured output”.**\n"
+            "- Includes clinical notes and reflection (if enabled).\n"
+            "- Regenerating counts as a new generation.\n"
+            "- A generation is an AI output, not a therapy session."
+        )
+    
+    # 🔧 DEFINE FIRST
     generate_reflection = st.sidebar.checkbox(
         "Generate therapist reflection / supervision view",
         value=False,
     )
-
+    
     if generate_reflection:
         reflection_intensity = st.sidebar.selectbox(
             "Reflection intensity",
@@ -787,6 +793,7 @@ def main():
         )
     else:
         reflection_intensity = "Deep"
+
 
     # ---- sidebar info ----
     st.sidebar.markdown("---")
