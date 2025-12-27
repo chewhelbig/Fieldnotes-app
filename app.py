@@ -7,7 +7,6 @@ from openai import OpenAI
 from fpdf import FPDF
 import streamlit.components.v1 as components
 
-import sqlite3
 from datetime import date
 import psycopg2
 
@@ -84,61 +83,36 @@ ADMIN_EMAILS = get_admin_emails()
 def is_admin(email: str) -> bool:
     return bool(email) and email.strip().lower() in ADMIN_EMAILS
 
-def init_db():
-    conn = sqlite3.connect("usage.db")
-    c = conn.cursor()
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            email TEXT PRIMARY KEY,
-            plan TEXT,
-            credits_remaining INTEGER,
-            monthly_allowance INTEGER,
-            last_reset TEXT
-        )
-    """)
-    conn.commit()
+def pg_get_user(email: str):
+    conn = get_pg_conn()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT email, plan, credits_remaining, monthly_allowance, last_reset,
+               subscription_status, stripe_customer_id, stripe_subscription_id
+        FROM users WHERE email=%s
+    """, (email,))
+    row = cur.fetchone()
+    cur.close()
     conn.close()
-
-init_db()
-# ===== User EMAIL ============
-def can_generate(email, cost=1):
-    conn = sqlite3.connect("usage.db")
-    c = conn.cursor()
-    c.execute("SELECT credits_remaining FROM users WHERE email=?", (email,))
-    row = c.fetchone()
-    conn.close()
-    return bool(row and row[0] >= cost)
+    return row
 
 
-def deduct_credits(email, cost=1):
-    conn = sqlite3.connect("usage.db")
-    c = conn.cursor()
-    c.execute("""
+# ===== credit ============
+
+def pg_deduct_credit(email: str) -> bool:
+    conn = get_pg_conn()
+    cur = conn.cursor()
+    cur.execute("""
         UPDATE users
-        SET credits_remaining = credits_remaining - ?
-        WHERE email=?
-    """, (cost, email))
+        SET credits_remaining = credits_remaining - 1
+        WHERE email=%s AND credits_remaining > 0
+        RETURNING credits_remaining
+    """, (email,))
+    ok = cur.fetchone() is not None
     conn.commit()
+    cur.close()
     conn.close()
-
-
-def reset_if_needed(email):
-    conn = sqlite3.connect("usage.db")
-    c = conn.cursor()
-    c.execute("SELECT last_reset, monthly_allowance FROM users WHERE email=?", (email,))
-    row = c.fetchone()
-
-    if row:
-        last_reset, allowance = row
-        if date.fromisoformat(last_reset).month != date.today().month:
-            c.execute("""
-                UPDATE users
-                SET credits_remaining=?, last_reset=?
-                WHERE email=?
-            """, (allowance, date.today().isoformat(), email))
-
-    conn.commit()
-    conn.close()
+    return ok
 
 # ============PASSWORD================
 def require_app_password():
@@ -774,6 +748,8 @@ def main():
         st.session_state["user_email"] = user_email
         ensure_user_exists(user_email)
         reset_if_needed(user_email)
+        
+        pg_user = pg_get_or_create_user(user_email)  # your function from 2F
 
         # ---- usage explanation ----
         st.sidebar.markdown("---")
@@ -866,54 +842,53 @@ def main():
     )
 
     # ===== Generate button (main area) =====
-    if st.button("Generate structured output", disabled=not email_ok):
-    
-        if not email_ok:
-            st.warning("Please enter your email in the sidebar to continue.")
+if st.button("Generate structured output", disabled=not email_ok):
+
+    if not email_ok:
+        st.warning("Please enter your email in the sidebar to continue.")
+        st.stop()
+
+    if not narrative.strip():
+        st.warning("Please enter a session narrative first.")
+        st.stop()
+
+    combined_narrative = narrative
+
+    # 1) NOTES — atomic deduct BEFORE calling OpenAI
+    if not pg_try_deduct_credits(user_email, COST_GENERATE_NOTES):
+        st.warning("Not enough credits to generate notes. Please top up.")
+        st.stop()
+
+    with st.spinner("Generating clinical notes..."):
+        notes_text = call_openai(
+            combined_narrative,
+            client_name,
+            output_mode
+        )
+
+    st.session_state["notes_text"] = notes_text
+    st.session_state["gen_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M")
+
+    # 2) REFLECTION (optional)
+    if generate_reflection:
+        cost = REFLECTION_COST.get(reflection_intensity, 1)
+
+        # atomic deduct BEFORE reflection call
+        if not pg_try_deduct_credits(user_email, cost):
+            st.warning("Not enough credits to generate reflection. Please top up.")
             st.stop()
-    
-        if not narrative.strip():
-            st.warning("Please enter a session narrative first.")
-            st.stop()
-    
-        combined_narrative = narrative
-    
-        # 1) NOTES — check credits first
-        if not can_generate(user_email, COST_GENERATE_NOTES):
-            st.warning("Not enough credits to generate notes. Please top up.")
-            st.stop()
-    
-        with st.spinner("Generating clinical notes..."):
-            notes_text = call_openai(
-                combined_narrative,
-                client_name,
-                output_mode
+
+        with st.spinner("Generating therapist reflection / supervision view..."):
+            reflection = call_reflection_engine(
+                narrative=combined_narrative,
+                ai_output=notes_text,
+                client_name=client_name,
+                intensity=reflection_intensity,
             )
-    
-        st.session_state["notes_text"] = notes_text
-        deduct_credits(user_email, COST_GENERATE_NOTES)
-        st.session_state["gen_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    
-        # 2) REFLECTION (optional)
-        if generate_reflection:
-            cost = REFLECTION_COST.get(reflection_intensity, 1)
-    
-            if not can_generate(user_email, cost):
-                st.warning("Not enough credits to generate reflection. Please top up.")
-                st.stop()
-    
-            with st.spinner("Generating therapist reflection / supervision view..."):
-                reflection = call_reflection_engine(
-                    narrative=combined_narrative,
-                    ai_output=notes_text,
-                    client_name=client_name,
-                    intensity=reflection_intensity,
-                )
-    
-            st.session_state["reflection_text"] = reflection
-            deduct_credits(user_email, cost)
-        else:
-            st.session_state["reflection_text"] = ""
+
+        st.session_state["reflection_text"] = reflection
+    else:
+        st.session_state["reflection_text"] = ""
 
 
     # ALWAYS read from session_state (survives reruns + downloads)
