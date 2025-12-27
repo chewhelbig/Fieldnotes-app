@@ -121,6 +121,27 @@ def require_app_password():
 
     st.stop()
 
+def require_allowed_email(user_email: str):
+    host = (os.environ.get("HOST_EMAIL") or "").strip().lower()
+    allowed_raw = os.environ.get("ALLOWED_EMAILS") or ""
+    allowed = {e.strip().lower() for e in allowed_raw.split(",") if e.strip()}
+
+    # Always allow host/admin
+    if host:
+        allowed.add(host)
+
+    # If no allowlist configured, do nothing (keeps app usable for you)
+    if not allowed:
+        return
+
+    if not user_email:
+        st.warning("Invite-only beta. Please enter your email to continue.")
+        st.stop()
+
+    if user_email.strip().lower() not in allowed:
+        st.error("This email isn’t on the invite list yet.")
+        st.info("If you should have access, contact the host.")
+        st.stop()
 
 
 # ------Get OPEN AI------------
