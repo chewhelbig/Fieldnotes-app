@@ -114,6 +114,27 @@ def pg_deduct_credit(email: str) -> bool:
     conn.close()
     return ok
 
+def pg_try_deduct_credits(email: str, amount: int) -> bool:
+    """Atomically deduct `amount` credits if available. Returns True if deducted."""
+    if amount <= 0:
+        return True
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+    cur.execute("""
+        UPDATE users
+        SET credits_remaining = credits_remaining - %s
+        WHERE email = %s AND credits_remaining >= %s
+        RETURNING credits_remaining
+    """, (amount, email, amount))
+    ok = cur.fetchone() is not None
+    conn.commit()
+    cur.close()
+    conn.close()
+    return ok
+
+
+
 # ============PASSWORD================
 def require_app_password():
     pwd = os.environ.get("APP_ACCESS_PASSWORD")
@@ -183,9 +204,6 @@ def get_openai_client():
         return None
     return OpenAI(api_key=key)
 
-    client = get_openai_client()
-    if client is None:
-        st.sidebar.error("Server is missing OPENAI_API_KEY (Render env var).")
 
 # =========================
 # OpenAI call helpers
