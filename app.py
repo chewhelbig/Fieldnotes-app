@@ -172,6 +172,21 @@ def pg_try_deduct_credits(email: str, amount: int) -> bool:
     conn.close()
     return ok
 
+def pg_add_credits(email: str, amount: int) -> None:
+    if amount <= 0:
+        return
+    conn = get_pg_conn()
+    cur = conn.cursor()
+    cur.execute("""
+        UPDATE users
+        SET credits_remaining = credits_remaining + %s
+        WHERE email = %s
+    """, (amount, email))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
 
 
 # ============PASSWORD================
@@ -924,14 +939,21 @@ def main():
         if not pg_try_deduct_credits(user_email, COST_GENERATE_NOTES):
             st.warning("Not enough credits to generate notes. Please top up.")
             st.stop()
-    
-        with st.spinner("Generating clinical notes..."):
-            notes_text = call_openai(
-                combined_narrative,
-                client_name,
-                output_mode
-            )
-    
+        
+        try:
+            with st.spinner("Generating clinical notes..."):
+                notes_text = call_openai(
+                    combined_narrative,
+                    client_name,
+                    output_mode
+                )
+        except Exception as e:
+            # refund credits if OpenAI fails
+            pg_add_credits(user_email, COST_GENERATE_NOTES)
+            st.error("OpenAI request failed. Your credits were refunded.")
+            st.exception(e)
+            st.stop()
+        
         st.session_state["notes_text"] = notes_text
         st.session_state["gen_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M")
     
@@ -942,14 +964,21 @@ def main():
             if not pg_try_deduct_credits(user_email, cost):
                 st.warning("Not enough credits to generate reflection. Please top up.")
                 st.stop()
-    
-            with st.spinner("Generating therapist reflection / supervision view..."):
-                reflection = call_reflection_engine(
-                    narrative=combined_narrative,
-                    ai_output=notes_text,
-                    client_name=client_name,
-                    intensity=reflection_intensity,
-                )
+            
+            try:
+                with st.spinner("Generating therapist reflection / supervision view..."):
+                    reflection = call_reflection_engine(
+                        narrative=combined_narrative,
+                        ai_output=notes_text,
+                        client_name=client_name,
+                        intensity=reflection_intensity,
+                    )
+            except Exception as e:
+                # refund credits if OpenAI fails
+                pg_add_credits(user_email, cost)
+                st.error("Reflection generation failed. Your credits were refunded.")
+                st.exception(e)
+                st.stop()
     
             st.session_state["reflection_text"] = reflection
         else:
