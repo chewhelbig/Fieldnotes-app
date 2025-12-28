@@ -8,9 +8,9 @@ from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
-stripe.api_key = os.environ["STRIPE_SECRET_KEY"]
-WEBHOOK_SECRET = os.environ["STRIPE_WEBHOOK_SECRET"]
-PRICE_ID = os.environ["STRIPE_PRICE_ID_MONTHLY"]
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
+WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+PRICE_ID = os.environ.get("STRIPE_PRICE_ID_MONTHLY", "")
 
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "https://fieldnotes-app-1.onrender.com").rstrip("/")
 
