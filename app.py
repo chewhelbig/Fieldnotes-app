@@ -6,7 +6,7 @@ import streamlit as st
 from openai import OpenAI
 from fpdf import FPDF
 import streamlit.components.v1 as components
-
+import requests
 from datetime import date
 import psycopg2
 
@@ -841,8 +841,27 @@ def main():
             "- Regenerating counts as a new generation.\n"
             "- A generation is an AI output, not a therapy session."
         )
+
+    # ---- billing / subscription ----
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Subscription")
     
-    # 🔧 DEFINE FIRST
+    if st.sidebar.button("Subscribe (monthly)"):
+        r = requests.post(
+            f"{BILLING_API_URL}/create-checkout-session",
+            json={"email": user_email},
+            timeout=30,
+        )
+        r.raise_for_status()
+        st.sidebar.link_button(
+            "Open Stripe Checkout",
+            r.json()["url"],
+        )
+
+
+
+    
+    # =========== 🔧 DEFINE FIRST =============
     generate_reflection = st.sidebar.checkbox(
         "Generate therapist reflection / supervision view",
         value=False,
