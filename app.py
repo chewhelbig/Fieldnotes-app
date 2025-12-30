@@ -788,46 +788,72 @@ def main():
         st.stop()
 
     # ========= Sidebar: account ===========
+    # ========= Sidebar ===========
+    # 1) Account (email first)
     st.sidebar.markdown("### 👤 Account")
+    
     user_email = st.sidebar.text_input(
         "Email (for subscription & credits)",
         value=st.session_state.get("user_email", ""),
         placeholder="you@clinic.com",
     ).strip().lower()
-
+    
     email_ok = bool(user_email)
-
-    if not email_ok:
-        st.sidebar.info("Enter your email to enable credits & downloads.")
-    else:
+    
+    if email_ok:
         st.session_state["user_email"] = user_email
-        
-
-        # Stage 1 gate (invite-only) — only after email exists
         require_allowed_email(user_email)
-
-        # Ensure user exists + reset + read once
+    
         pg_get_or_create_user(user_email)
         pg_maybe_reset_monthly(user_email)
         pg_user = pg_get_user(user_email)
-
+    
         if pg_user:
             credits_remaining = pg_user[2]
             st.sidebar.caption(f"Credits remaining: {credits_remaining}")
-
-    # ---- usage ----
+    else:
+        st.sidebar.info("Enter your email to enable credits & downloads.")
+    
     st.sidebar.markdown("---")
-    st.sidebar.subheader("Usage")
-    with st.sidebar.expander("What is 1 generation?"):
-        st.markdown(
-            "- **1 generation = 1 click on “Generate structured output”.**\n"
-            "- Includes clinical notes and reflection (if enabled).\n"
-            "- Regenerating counts as a new generation.\n"
-            "- A generation is an AI output, not a therapy session."
+    
+    # 2) Access (password after email)
+    st.sidebar.markdown("### 🔒 Access")
+    pwd = os.environ.get("APP_ACCESS_PASSWORD")
+    if pwd and not st.session_state.get("access_ok"):
+        entered = st.sidebar.text_input("Access password", type="password", key="access_password")
+        if st.sidebar.button("Enter", key="access_enter"):
+            if entered == pwd:
+                st.session_state["access_ok"] = True
+                st.rerun()
+            else:
+                st.sidebar.error("Incorrect password")
+        st.sidebar.info("Enter the access password to enable generating.")
+    else:
+        st.sidebar.caption("Access: enabled")
+    
+    st.sidebar.markdown("---")
+    
+    # 3) Settings
+    st.sidebar.header("Settings")
+    output_mode = st.sidebar.radio("Output detail level", ["Short", "Full"], index=1)
+    
+    generate_reflection = st.sidebar.checkbox(
+        "Generate therapist reflection / supervision view",
+        value=False,
+    )
+    
+    if generate_reflection:
+        reflection_intensity = st.sidebar.selectbox(
+            "Reflection intensity",
+            options=["Basic", "Deep", "Very deep"],
+            index=1,
         )
-
-    # ---- billing / subscription ----
+    else:
+        reflection_intensity = "Deep"
+    
     st.sidebar.markdown("---")
+    
+    # 4) Subscription
     st.sidebar.subheader("Subscription")
     if st.sidebar.button("Subscribe (monthly)"):
         if not email_ok:
@@ -840,30 +866,26 @@ def main():
             )
             r.raise_for_status()
             st.sidebar.link_button("Open Stripe Checkout", r.json()["url"])
-
-    # ---- reflection settings ----
-    generate_reflection = st.sidebar.checkbox(
-        "Generate therapist reflection / supervision view",
-        value=False,
-    )
-    if generate_reflection:
-        reflection_intensity = st.sidebar.selectbox(
-            "Reflection intensity",
-            options=["Basic", "Deep", "Very deep"],
-            index=1,
-        )
-    else:
-        reflection_intensity = "Deep"
-
-
-    # ---- other sidebar settings ----
+    
     st.sidebar.markdown("---")
-    st.sidebar.header("Settings")
-    output_mode = st.sidebar.radio("Output detail level", ["Short", "Full"], index=1)
+    
+    # 5) Usage
+    st.sidebar.subheader("Usage")
+    with st.sidebar.expander("What is 1 generation?"):
+        st.markdown(
+            "- **1 generation = 1 click on “Generate structured output”.**\n"
+            "- Includes clinical notes and reflection (if enabled).\n"
+            "- Regenerating counts as a new generation.\n"
+            "- A generation is an AI output, not a therapy session."
+        )
+    
+    st.sidebar.markdown("---")
+    
+    # 6) Optional info blocks
+    st.sidebar.subheader("Hosted mode: download-only")
+    st.sidebar.caption("No notes are stored on this server. Use Download to save files to your device.")
 
     # ========= Main content always renders =========
-    st.title("FieldNotes - Session Companion")
-    st.write(...)
 
     # ========= Main content =================
     st.title("FieldNotes - Session Companion")
