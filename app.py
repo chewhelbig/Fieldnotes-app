@@ -313,6 +313,12 @@ OPENAI_MODEL_NOTES = "gpt-4.1-mini"
 OPENAI_MODEL_REFLECTION = "gpt-4.1-mini"
 MAX_TOKENS_REFLECTION = 2300
 
+BILLING_API_URL = os.getenv(
+    "BILLING_API_URL",
+    "https://fieldnotes-billing.onrender.com"
+)
+
+
 # ==================
 # Credits
 #===================
