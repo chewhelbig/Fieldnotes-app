@@ -190,42 +190,27 @@ def pg_add_credits(email: str, amount: int) -> None:
 
 
 # ============PASSWORD================
-def require_app_password():
+def require_app_password_sidebar() -> bool:
     pwd = os.environ.get("APP_ACCESS_PASSWORD")
-
     if not pwd:
-        return  # no password set → app open
+        return True  # no password set → open
 
     if st.session_state.get("access_ok"):
-        return
+        return True
 
-    st.title("FieldNotes")
-
-    with st.form("access_form", clear_on_submit=False):
-        # Dummy field to reduce browser password popups
-        st.text_input(
-            "Username",
-            value="",
-            key="__dummy_user",
-            label_visibility="collapsed"
-        )
-
-        entered = st.text_input(
-            "Enter access password",
-            type="password",
-            key="access_password"
-        )
-
-        submitted = st.form_submit_button("Enter")
-
-    if submitted:
+    st.sidebar.markdown("### 🔒 Access")
+    entered = st.sidebar.text_input("Access password", type="password", key="access_password")
+    if st.sidebar.button("Enter", key="access_enter"):
         if entered == pwd:
             st.session_state["access_ok"] = True
             st.rerun()
         else:
-            st.error("Incorrect password")
+            st.sidebar.error("Incorrect password")
 
-    st.stop()
+    # Do NOT stop the page; just show a note
+    st.sidebar.info("Enter the access password to enable the app.")
+    return False
+
 
 def require_allowed_email(user_email: str):
     host = (os.environ.get("HOST_EMAIL") or "").strip().lower()
@@ -795,12 +780,12 @@ Respond in a supervisor-style reflective tone, grounded in Gestalt field theory.
 # =====================
 # ======= UI ============
 def main():
-    require_app_password()
+    access_ok = require_app_password_sidebar()
+
     ensure_pg_schema()
     if not os.environ.get("DATABASE_URL"):
         st.error("Server misconfiguration: DATABASE_URL is missing (Render env var).")
         st.stop()
-
 
     # ========= Sidebar: account ===========
     st.sidebar.markdown("### 👤 Account")
@@ -814,32 +799,25 @@ def main():
 
     if not email_ok:
         st.sidebar.info("Enter your email to enable credits & downloads.")
-        st.stop()
+    else:
+        st.session_state["user_email"] = user_email
+        
 
-    st.session_state["user_email"] = user_email
+        # Stage 1 gate (invite-only) — only after email exists
+        require_allowed_email(user_email)
 
-    # Stage 1 gate (invite-only)
-    require_allowed_email(user_email)
+        # Ensure user exists + reset + read once
+        pg_get_or_create_user(user_email)
+        pg_maybe_reset_monthly(user_email)
+        pg_user = pg_get_user(user_email)
 
-    # Ensure user exists
-    pg_get_or_create_user(user_email)
-    
-    # Monthly reset (runs once per app load)
-    pg_maybe_reset_monthly(user_email)
-    
-    # Read user state once
-    pg_user = pg_get_user(user_email)
+        if pg_user:
+            credits_remaining = pg_user[2]
+            st.sidebar.caption(f"Credits remaining: {credits_remaining}")
 
-
-  
-    # ---- usage / credits display ----
-    if pg_user:
-        credits_remaining = pg_user[2]  # credits_remaining
-        st.sidebar.caption(f"Credits remaining: {credits_remaining}")
-    
+    # ---- usage ----
     st.sidebar.markdown("---")
     st.sidebar.subheader("Usage")
-    
     with st.sidebar.expander("What is 1 generation?"):
         st.markdown(
             "- **1 generation = 1 click on “Generate structured output”.**\n"
@@ -851,28 +829,23 @@ def main():
     # ---- billing / subscription ----
     st.sidebar.markdown("---")
     st.sidebar.subheader("Subscription")
-    
     if st.sidebar.button("Subscribe (monthly)"):
-        r = requests.post(
-            f"{BILLING_API_URL}/create-checkout-session",
-            json={"email": user_email},
-            timeout=30,
-        )
-        r.raise_for_status()
-        st.sidebar.link_button(
-            "Open Stripe Checkout",
-            r.json()["url"],
-        )
+        if not email_ok:
+            st.sidebar.warning("Enter your email first.")
+        else:
+            r = requests.post(
+                f"{BILLING_API_URL}/create-checkout-session",
+                json={"email": user_email},
+                timeout=30,
+            )
+            r.raise_for_status()
+            st.sidebar.link_button("Open Stripe Checkout", r.json()["url"])
 
-
-
-    
-    # =========== 🔧 DEFINE FIRST =============
+    # ---- reflection settings ----
     generate_reflection = st.sidebar.checkbox(
         "Generate therapist reflection / supervision view",
         value=False,
     )
-    
     if generate_reflection:
         reflection_intensity = st.sidebar.selectbox(
             "Reflection intensity",
@@ -882,24 +855,14 @@ def main():
     else:
         reflection_intensity = "Deep"
 
-
-    # ---- sidebar info ----
+    # ---- other sidebar settings ----
     st.sidebar.markdown("---")
     st.sidebar.header("Settings")
     output_mode = st.sidebar.radio("Output detail level", ["Short", "Full"], index=1)
 
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Hosted mode: download-only")
-    st.sidebar.caption("No notes are stored on this server. Use Download to save files to your device.")
-
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("About")
-    st.sidebar.caption(f"FieldNotes for Therapists · v{APP_VERSION}")
-    st.sidebar.caption("Created by Nicole Chew-Helbig, Gestalt psychotherapist")
-    st.sidebar.caption(
-        "These notes are generated to support your clinical thinking and are not a "
-        "substitute for your professional judgment or supervision."
-    )
+    # ========= Main content always renders =========
+    st.title("FieldNotes - Session Companion")
+    st.write(...)
 
     # ========= Main content =================
     st.title("FieldNotes - Session Companion")
@@ -948,15 +911,16 @@ def main():
     )
     
     # ===== Generate button (main area) =====
-    if st.button("Generate structured output", disabled=not email_ok):
+    if st.button("Generate structured output"):
+        if not access_ok:
+            st.warning("Please enter the access password in the sidebar.")
+            st.stop()
     
         if not email_ok:
             st.warning("Please enter your email in the sidebar to continue.")
             st.stop()
-    
-        if not narrative.strip():
-            st.warning("Please enter a session narrative first.")
-            st.stop()
+            
+        # (optional) require subscription / credits here
     
         combined_narrative = narrative
     
@@ -1012,8 +976,8 @@ def main():
 
 
     # ALWAYS read from session_state (survives reruns + downloads)
-    notes_text = st.session_state["notes_text"]
-    reflection_text = st.session_state["reflection_text"]
+    notes_text = st.session_state.get("notes_text", "")
+    reflection_text = st.session_state.get("reflection_text", "")
 
     # Tabs: Notes / Reflection (only show if we have something)
     if notes_text.strip() or reflection_text.strip():
