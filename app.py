@@ -855,6 +855,7 @@ def main():
     else:
         reflection_intensity = "Deep"
 
+
     # ---- other sidebar settings ----
     st.sidebar.markdown("---")
     st.sidebar.header("Settings")
@@ -919,6 +920,11 @@ def main():
         if not email_ok:
             st.warning("Please enter your email in the sidebar to continue.")
             st.stop()
+    
+        if not narrative.strip():
+            st.warning("Please enter a session narrative first.")
+            st.stop()
+
             
         # (optional) require subscription / credits here
     
