@@ -917,6 +917,11 @@ def main():
     st.subheader("Account")
     st.write(f"Signed in as: **{user_email}**")
 
+    # --- Gate 2: Password after email ---
+    if os.environ.get("APP_ACCESS_PASSWORD") and not access_ok:
+        st.info("Please enter the access password in the sidebar to unlock the app.")
+        st.stop()
+
     # --- Gate 3: Subscription required ---
     is_subscribed = subscription_status in ("active", "trialing")
     if not is_subscribed:
@@ -933,10 +938,7 @@ def main():
         st.stop()
 
     
-    # --- Gate 2: Password after email ---
-    if os.environ.get("APP_ACCESS_PASSWORD") and not access_ok:
-        st.info("Please enter the access password in the sidebar to unlock the app.")
-        st.stop()
+  
 
 
 
