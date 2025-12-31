@@ -199,7 +199,7 @@ def require_app_password_sidebar() -> bool:
         return True
 
     st.sidebar.markdown("### 🔒 Access")
-        entered = st.sidebar.text_input(
+    entered = st.sidebar.text_input(
         "Access password",
         type="password",
         key="access_password_sidebar"
