@@ -916,12 +916,28 @@ def main():
     
     st.subheader("Account")
     st.write(f"Signed in as: **{user_email}**")
+
+    # --- Gate 3: Subscription required ---
+    is_subscribed = subscription_status in ("active", "trialing")
+    if not is_subscribed:
+        st.subheader("Subscription required")
+        st.write("This app requires an active subscription (**USD 29/month**).")
+        st.write("Please subscribe in the sidebar to continue.")
+        st.stop()
+    
+    # --- Gate 4: Must have credits ---
+    if credits_remaining <= 0:
+        st.subheader("No credits remaining")
+        st.write("You currently have **0 credits**.")
+        st.write("Please add credits in the sidebar to continue.")
+        st.stop()
+
     
     # --- Gate 2: Password after email ---
-    access_ok = require_app_password_sidebar()
     if os.environ.get("APP_ACCESS_PASSWORD") and not access_ok:
         st.info("Please enter the access password in the sidebar to unlock the app.")
         st.stop()
+
 
 
     # Client label (not stored)
@@ -964,6 +980,21 @@ def main():
         if not email_ok:
             st.warning("Please enter your email in the sidebar to continue.")
             st.stop()
+        # Must be subscribed to use the app
+        if subscription_status not in ("active", "trialing"):
+            st.warning("Please subscribe (USD 29/month) to use the app.")
+            st.stop()
+    
+        # Must have credits to generate
+        if credits_remaining <= 0:
+            st.warning("You have 0 credits. Please add credits to continue.")
+            st.stop()
+    
+        # Must have password if enabled
+        if os.environ.get("APP_ACCESS_PASSWORD") and not access_ok:
+            st.warning("Please enter the access password in the sidebar.")
+            st.stop()
+
     
         if not narrative.strip():
             st.warning("Please enter a session narrative first.")
