@@ -220,26 +220,8 @@ def require_app_password_sidebar() -> bool:
 
 
 def require_allowed_email(user_email: str):
-    host = (os.environ.get("HOST_EMAIL") or "").strip().lower()
-    allowed_raw = os.environ.get("ALLOWED_EMAILS") or ""
-    allowed = {e.strip().lower() for e in allowed_raw.split(",") if e.strip()}
+    return
 
-    # Always allow host/admin
-    if host:
-        allowed.add(host)
-
-    # If no allowlist configured, do nothing (keeps app usable for you)
-    if not allowed:
-        return
-
-    if not user_email:
-        st.warning("Invite-only beta. Please enter your email to continue.")
-        st.stop()
-
-    if user_email.strip().lower() not in allowed:
-        st.error("This email isn’t on the invite list yet.")
-        st.info("If you should have access, contact the host.")
-        st.stop()
 
 
 # ------Get OPEN AI------------
@@ -792,39 +774,92 @@ def main():
     if not os.environ.get("DATABASE_URL"):
         st.error("Server misconfiguration: DATABASE_URL is missing (Render env var).")
         st.stop()
-
-    # ========= Sidebar: account ===========
-  
-    # 1) Account (email first)
-    st.sidebar.markdown("### 👤 Account")
+    
+    # =========================
+    # Sidebar
+    # =========================
+    
+    # 1) Sign in (email)
+    st.sidebar.markdown("### 👤 Sign in")
     
     user_email = st.sidebar.text_input(
-        "Email (for subscription & credits)",
+        "Email",
         value=st.session_state.get("user_email", ""),
         placeholder="you@clinic.com",
     ).strip().lower()
     
     email_ok = bool(user_email)
     
+    pg_user = None
+    credits_remaining = 0
+    subscription_status = ""
+    
     if email_ok:
         st.session_state["user_email"] = user_email
-        require_allowed_email(user_email)
     
+        # Ensure user exists + monthly reset
         pg_get_or_create_user(user_email)
         pg_maybe_reset_monthly(user_email)
         pg_user = pg_get_user(user_email)
     
         if pg_user:
-            credits_remaining = pg_user[2]
-            st.sidebar.caption(f"Credits remaining: {credits_remaining}")
-    else:
-        st.sidebar.info("Enter your email to enable credits & downloads.")
+            credits_remaining = int(pg_user[2] or 0)
+            subscription_status = (pg_user[5] or "").lower()
     
-
+        st.sidebar.caption(f"Credits remaining: {credits_remaining}")
+    else:
+        st.sidebar.info("Enter your email to continue.")
     
     st.sidebar.markdown("---")
     
-    # 3) Settings
+    # 2) Password (only after email)
+    st.sidebar.markdown("### 🔒 Password")
+    access_ok = False
+    if email_ok:
+        access_ok = require_app_password_sidebar()
+    else:
+        st.sidebar.caption("Enter email first to unlock access.")
+    
+    st.sidebar.markdown("---")
+    
+    # 3) Subscribe / Add credits (only after email)
+    st.sidebar.markdown("### 💳 Subscribe / Credits")
+    
+    is_subscribed = subscription_status in ("active", "trialing")
+    
+    if not email_ok:
+        st.sidebar.caption("Enter email first to subscribe.")
+    else:
+        if not is_subscribed:
+            st.sidebar.warning("Subscription required (USD 29/month).")
+            if st.sidebar.button("Subscribe USD 29/month", key="btn_subscribe_monthly"):
+                r = requests.post(
+                    f"{BILLING_API_URL}/create-checkout-session",
+                    json={"email": user_email},
+                    timeout=30,
+                )
+                r.raise_for_status()
+                st.sidebar.link_button("Open Stripe Checkout", r.json()["url"])
+        else:
+            st.sidebar.success("Subscription: active")
+    
+            # Optional: Add credits button (depends on your billing backend)
+            # If you already built a credits checkout endpoint, set it here:
+            if st.sidebar.button("Add credits", key="btn_add_credits"):
+                try:
+                    r = requests.post(
+                        f"{BILLING_API_URL}/create-credits-checkout-session",
+                        json={"email": user_email},
+                        timeout=30,
+                    )
+                    r.raise_for_status()
+                    st.sidebar.link_button("Open credits checkout", r.json()["url"])
+                except Exception:
+                    st.sidebar.info("Credits top-up endpoint not configured yet.")
+    
+    st.sidebar.markdown("---")
+    
+    # 4) Settings (only useful once subscribed + access ok)
     st.sidebar.header("Settings")
     output_mode = st.sidebar.radio("Output detail level", ["Short", "Full"], index=1)
     
@@ -844,26 +879,10 @@ def main():
     
     st.sidebar.markdown("---")
     
-    # 4) Subscription
-    st.sidebar.subheader("Subscription")
-    if st.sidebar.button("Subscribe (monthly)"):
-        if not email_ok:
-            st.sidebar.warning("Enter your email first.")
-        else:
-            r = requests.post(
-                f"{BILLING_API_URL}/create-checkout-session",
-                json={"email": user_email},
-                timeout=30,
-            )
-            r.raise_for_status()
-            st.sidebar.link_button("Open Stripe Checkout", r.json()["url"])
-    
-    st.sidebar.markdown("---")
-    
-    # 5) Usage
+    # Usage + hosted mode info can stay
     st.sidebar.subheader("Usage")
     with st.sidebar.expander("What is 1 generation?"):
-        st.markdown(
+        st.sidebar.markdown(
             "- **1 generation = 1 click on “Generate structured output”.**\n"
             "- Includes clinical notes and reflection (if enabled).\n"
             "- Regenerating counts as a new generation.\n"
@@ -871,10 +890,9 @@ def main():
         )
     
     st.sidebar.markdown("---")
-    
-    # 6) Optional info blocks
     st.sidebar.subheader("Hosted mode: download-only")
     st.sidebar.caption("No notes are stored on this server. Use Download to save files to your device.")
+
 
     # ========= Main content always renders =========
 
@@ -894,7 +912,7 @@ def main():
         st.stop()
     
     # (Optional) invite-only gate (keeps your beta list behavior)
-    require_allowed_email(user_email)
+   
     
     st.subheader("Account")
     st.write(f"Signed in as: **{user_email}**")
