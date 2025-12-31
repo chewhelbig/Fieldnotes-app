@@ -929,6 +929,10 @@ def main():
     )
     
     # ===== Generate button (main area) =====
+    if st.button("Generate structured output"):
+        if not access_ok:
+            st.warning("Please enter the access password in the sidebar.")
+            st.stop()
     
         if not email_ok:
             st.warning("Please enter your email in the sidebar to continue.")
