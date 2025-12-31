@@ -196,7 +196,9 @@ def require_app_password_sidebar() -> bool:
         return True  # no password set → open
 
     if st.session_state.get("access_ok"):
+        st.sidebar.caption("Access: enabled")
         return True
+
 
     st.sidebar.markdown("### 🔒 Access")
     entered = st.sidebar.text_input(
@@ -927,10 +929,6 @@ def main():
     )
     
     # ===== Generate button (main area) =====
-    if st.button("Generate structured output"):
-        if not access_ok:
-            st.warning("Please enter the access password in the sidebar.")
-            st.stop()
     
         if not email_ok:
             st.warning("Please enter your email in the sidebar to continue.")
