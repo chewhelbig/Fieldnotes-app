@@ -787,18 +787,14 @@ Respond in a supervisor-style reflective tone, grounded in Gestalt field theory.
 # =====================
 # ======= UI ============
 def main():
-    # 0) Access gate (password)
-    access_ok = require_app_password_sidebar()
-    if os.environ.get("APP_ACCESS_PASSWORD") and not access_ok:
-        st.stop()
-
+ 
     ensure_pg_schema()
     if not os.environ.get("DATABASE_URL"):
         st.error("Server misconfiguration: DATABASE_URL is missing (Render env var).")
         st.stop()
 
     # ========= Sidebar: account ===========
-    # ========= Sidebar ===========
+  
     # 1) Account (email first)
     st.sidebar.markdown("### 👤 Account")
     
@@ -891,8 +887,24 @@ def main():
         "Use the download buttons to save to your own device."
     )
 
+    # --- Gate 1: Email first (sign in / sign up) ---
     if not email_ok:
-        st.info("To start: enter your email in the sidebar (used only for credits & billing).")
+        st.info("Please enter your email in the sidebar to continue.")
+        st.write("New user? Enter your email, then subscribe in the sidebar to activate your account.")
+        st.stop()
+    
+    # (Optional) invite-only gate (keeps your beta list behavior)
+    require_allowed_email(user_email)
+    
+    st.subheader("Account")
+    st.write(f"Signed in as: **{user_email}**")
+    
+    # --- Gate 2: Password after email ---
+    access_ok = require_app_password_sidebar()
+    if os.environ.get("APP_ACCESS_PASSWORD") and not access_ok:
+        st.info("Please enter the access password in the sidebar to unlock the app.")
+        st.stop()
+
 
     # Client label (not stored)
     st.markdown("### 👨🏽‍🦰🧔🏻‍♀️ Client & Session Code")
@@ -930,9 +942,6 @@ def main():
     
     # ===== Generate button (main area) =====
     if st.button("Generate structured output"):
-        if not access_ok:
-            st.warning("Please enter the access password in the sidebar.")
-            st.stop()
     
         if not email_ok:
             st.warning("Please enter your email in the sidebar to continue.")
