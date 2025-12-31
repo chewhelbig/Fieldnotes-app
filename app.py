@@ -199,7 +199,12 @@ def require_app_password_sidebar() -> bool:
         return True
 
     st.sidebar.markdown("### 🔒 Access")
-    entered = st.sidebar.text_input("Access password", type="password", key="access_password")
+        entered = st.sidebar.text_input(
+        "Access password",
+        type="password",
+        key="access_password_sidebar"
+    )
+
     if st.sidebar.button("Enter", key="access_enter"):
         if entered == pwd:
             st.session_state["access_ok"] = True
@@ -780,7 +785,10 @@ Respond in a supervisor-style reflective tone, grounded in Gestalt field theory.
 # =====================
 # ======= UI ============
 def main():
+    # 0) Access gate (password)
     access_ok = require_app_password_sidebar()
+    if os.environ.get("APP_ACCESS_PASSWORD") and not access_ok:
+        st.stop()
 
     ensure_pg_schema()
     if not os.environ.get("DATABASE_URL"):
@@ -814,22 +822,7 @@ def main():
     else:
         st.sidebar.info("Enter your email to enable credits & downloads.")
     
-    st.sidebar.markdown("---")
-    
-    # 2) Access (password after email)
-    st.sidebar.markdown("### 🔒 Access")
-    pwd = os.environ.get("APP_ACCESS_PASSWORD")
-    if pwd and not st.session_state.get("access_ok"):
-        entered = st.sidebar.text_input("Access password", type="password", key="access_password")
-        if st.sidebar.button("Enter", key="access_enter"):
-            if entered == pwd:
-                st.session_state["access_ok"] = True
-                st.rerun()
-            else:
-                st.sidebar.error("Incorrect password")
-        st.sidebar.info("Enter the access password to enable generating.")
-    else:
-        st.sidebar.caption("Access: enabled")
+
     
     st.sidebar.markdown("---")
     
