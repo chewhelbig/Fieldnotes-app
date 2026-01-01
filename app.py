@@ -839,7 +839,7 @@ def main():
     st.sidebar.markdown("---")
     
     # 2) Password (only after email)
-    st.sidebar.markdown("🔒 App Access")
+    st.sidebar.markdown("### 🔒 App Access")
     access_ok = False
     if email_ok:
         access_ok = require_app_password_sidebar()
@@ -933,8 +933,9 @@ def main():
 
     # --- Gate 1: Email first (sign in / sign up) ---
     if not email_ok:
-        st.info("Please enter your email in the sidebar to continue.")
-        st.write("New user? Enter your email, then subscribe in the sidebar to activate your account.")
+        st.subheader("Welcome")
+        st.write("Enter your email in the sidebar to sign in or create an account.")
+        st.write("New accounts start with **30 free credits**.")
         st.stop()
     
     # (Optional) invite-only gate (keeps your beta list behavior)
@@ -943,18 +944,21 @@ def main():
     st.subheader("Account")
     st.write(f"Signed in as: **{user_email}**")
 
-    # --- Gate 2: Password after email ---
+    # --- Gate 2: App access password (if enabled) ---
     if os.environ.get("APP_ACCESS_PASSWORD") and not access_ok:
-        st.info("Please enter the access password in the sidebar to unlock the app.")
+        st.subheader("Access required")
+        st.write("Please enter the app access password in the sidebar to continue.")
+        st.stop()
+    
+    # --- Gate 3: Free trial / subscription gate ---
+    is_subscribed = subscription_status in ("active", "trialing")
+    
+    if (not is_subscribed) and (credits_remaining <= 0):
+        st.subheader("Free trial ended")
+        st.write("You’ve used all **30 free credits**.")
+        st.write("Subscribe (USD 29/month) or add credits to continue using the app.")
         st.stop()
 
-    # --- Gate 3: Subscription required ---
-    is_subscribed = subscription_status in ("active", "trialing")
-    if not is_subscribed:
-        st.subheader("Subscription required")
-        st.write("This app requires an active subscription (**USD 29/month**).")
-        st.write("Please subscribe in the sidebar to continue.")
-        st.stop()
     
     # --- Gate 4: Must have credits ---
     if credits_remaining <= 0:
