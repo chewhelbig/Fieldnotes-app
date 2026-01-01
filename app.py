@@ -48,21 +48,44 @@ DEFAULT_MONTHLY_ALLOWANCE = 30
 def pg_get_or_create_user(email: str):
     conn = get_pg_conn()
     cur = conn.cursor()
-    cur.execute("SELECT email, plan, credits_remaining, monthly_allowance, last_reset FROM users WHERE email=%s", (email,))
+
+    cur.execute(
+        """
+        SELECT email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status
+        FROM users
+        WHERE email = %s
+        """,
+        (email,),
+    )
     row = cur.fetchone()
 
+    created = False
+
     if not row:
-        cur.execute("""
-            INSERT INTO users (email, plan, credits_remaining, monthly_allowance, last_reset)
-            VALUES (%s, 'beta', %s, %s, %s)
-        """, (email, DEFAULT_MONTHLY_ALLOWANCE, DEFAULT_MONTHLY_ALLOWANCE, date.today()))
+        created = True
+        cur.execute(
+            """
+            INSERT INTO users (email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status)
+            VALUES (%s, 'free', 30, 30, CURRENT_DATE, 'free')
+            """,
+            (email,),
+        )
         conn.commit()
-        cur.execute("SELECT email, plan, credits_remaining, monthly_allowance, last_reset FROM users WHERE email=%s", (email,))
+
+        cur.execute(
+            """
+            SELECT email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status
+            FROM users
+            WHERE email = %s
+            """,
+            (email,),
+        )
         row = cur.fetchone()
 
     cur.close()
     conn.close()
-    return row
+    return row, created
+
 
 def pg_maybe_reset_monthly(email: str):
     conn = get_pg_conn()
@@ -798,9 +821,12 @@ def main():
         st.session_state["user_email"] = user_email
     
         # Ensure user exists + monthly reset
-        pg_get_or_create_user(user_email)
+        pg_user, created = pg_get_or_create_user(user_email)
         pg_maybe_reset_monthly(user_email)
-        pg_user = pg_get_user(user_email)
+        
+        if created:
+            st.sidebar.success("Account created — 30 free credits added 🎁")
+
     
         if pg_user:
             credits_remaining = int(pg_user[2] or 0)
@@ -813,7 +839,7 @@ def main():
     st.sidebar.markdown("---")
     
     # 2) Password (only after email)
-    st.sidebar.markdown("### 🔒 Password")
+    st.sidebar.markdown("🔒 App Access")
     access_ok = False
     if email_ok:
         access_ok = require_app_password_sidebar()
