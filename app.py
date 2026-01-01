@@ -242,10 +242,6 @@ def require_app_password_sidebar() -> bool:
     return False
 
 
-def require_allowed_email(user_email: str):
-    return
-
-
 
 # ------Get OPEN AI------------
 @st.cache_resource
@@ -838,15 +834,6 @@ def main():
     
     st.sidebar.markdown("---")
     
-    # 2) Password (only after email)
-    st.sidebar.markdown("### 🔒 App Access")
-    access_ok = False
-    if email_ok:
-        access_ok = require_app_password_sidebar()
-    else:
-        st.sidebar.caption("Enter email first to unlock access.")
-    
-    st.sidebar.markdown("---")
     
     # 3) Subscribe / Add credits (only after email)
     st.sidebar.markdown("### 💳 Subscribe / Credits")
@@ -944,28 +931,19 @@ def main():
     st.subheader("Account")
     st.write(f"Signed in as: **{user_email}**")
 
-    # --- Gate 2: App access password (if enabled) ---
-    if os.environ.get("APP_ACCESS_PASSWORD") and not access_ok:
-        st.subheader("Access required")
-        st.write("Please enter the app access password in the sidebar to continue.")
-        st.stop()
+
     
-    # --- Gate 3: Free trial / subscription gate ---
+    # --- Trial / billing status (informational only; do NOT stop the app UI) ---
     is_subscribed = subscription_status in ("active", "trialing")
     
     if (not is_subscribed) and (credits_remaining <= 0):
-        st.subheader("Free trial ended")
-        st.write("You’ve used all **30 free credits**.")
-        st.write("Subscribe (USD 29/month) or add credits to continue using the app.")
-        st.stop()
+        st.warning("Free trial ended: you’ve used all 30 credits.")
+        st.write("Subscribe (USD 29/month) or add credits to generate new outputs.")
+    elif not is_subscribed:
+        st.info(f"Free trial: {credits_remaining} credits remaining.")
+    else:
+        st.success("Subscription active.")
 
-    
-    # --- Gate 4: Must have credits ---
-    if credits_remaining <= 0:
-        st.subheader("No credits remaining")
-        st.write("You currently have **0 credits**.")
-        st.write("Please add credits in the sidebar to continue.")
-        st.stop()
 
     
   
@@ -1005,26 +983,23 @@ def main():
         mime="text/plain",
         key="dl_draft_txt"
     )
-    
+
+    is_subscribed = subscription_status in ("active", "trialing")
+    can_generate = (credits_remaining > 0) or is_subscribed
+
     # ===== Generate button (main area) =====
-    if st.button("Generate structured output"):
+    if st.button("Generate structured output", disabled=not can_generate):  
     
         if not email_ok:
             st.warning("Please enter your email in the sidebar to continue.")
             st.stop()
-        # Must be subscribed to use the app
-        if subscription_status not in ("active", "trialing"):
-            st.warning("Please subscribe (USD 29/month) to use the app.")
+        if (credits_remaining <= 0) and (subscription_status not in ("active", "trialing")):
+            st.warning("Free trial ended. Please subscribe (USD 29/month) or add credits to continue.")
             st.stop()
-    
+
         # Must have credits to generate
         if credits_remaining <= 0:
             st.warning("You have 0 credits. Please add credits to continue.")
-            st.stop()
-    
-        # Must have password if enabled
-        if os.environ.get("APP_ACCESS_PASSWORD") and not access_ok:
-            st.warning("Please enter the access password in the sidebar.")
             st.stop()
 
     
