@@ -212,3 +212,5 @@ async def webhook(request: Request):
             add_credits(email, 100)
     
         return JSONResponse({"received": True})
+
+    return JSONResponse({"received": True})
