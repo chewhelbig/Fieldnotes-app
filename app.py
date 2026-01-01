@@ -799,8 +799,8 @@ def main():
     # =========================
     
     # 1) Sign in (email)
-    st.sidebar.markdown("### 👤 Sign in")
-    
+    st.sidebar.markdown("### 👤 Sign in / Sign up")
+    st.sidebar.caption("Enter your email to create an account or continue. New users get 30 free credits.")
     user_email = st.sidebar.text_input(
         "Email",
         value=st.session_state.get("user_email", ""),
@@ -985,7 +985,8 @@ def main():
     )
 
     is_subscribed = subscription_status in ("active", "trialing")
-    can_generate = (credits_remaining > 0) or is_subscribed
+    can_generate = credits_remaining > 0
+
 
     # ===== Generate button (main area) =====
     if st.button("Generate structured output", disabled=not can_generate):  
@@ -997,9 +998,9 @@ def main():
             st.warning("Free trial ended. Please subscribe (USD 29/month) or add credits to continue.")
             st.stop()
 
-        # Must have credits to generate
-        if credits_remaining <= 0:
-            st.warning("You have 0 credits. Please add credits to continue.")
+        # If not subscribed, credits must be > 0 (free trial)
+        if (credits_remaining <= 0) and (subscription_status not in ("active", "trialing")):
+            st.warning("Free trial ended. Please subscribe (USD 29/month) or add credits to continue.")
             st.stop()
 
     
