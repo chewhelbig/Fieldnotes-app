@@ -33,6 +33,35 @@ def upsert_user(email: str) -> str:
     conn.close()
     return email
 
+def grant_pro_monthly_credits(email: str):
+    """
+    Set the user to Pro and grant 100 credits/month (and set current credits to 100).
+    Safe to call multiple times.
+    """
+    email = (email or "").strip().lower()
+    if not email:
+        return
+
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        UPDATE users
+        SET
+          plan = 'pro',
+          subscription_status = 'active',
+          monthly_allowance = 100,
+          credits_remaining = 100,
+          last_reset = CURRENT_DATE
+        WHERE email = %s
+        """,
+        (email,),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
 def update_user_subscription(email: str, sub_obj: dict):
     status = sub_obj.get("status")
     customer_id = sub_obj.get("customer")
@@ -127,21 +156,59 @@ async def webhook(request: Request):
 
     etype = event["type"]
     obj = event["data"]["object"]
+    
+    if etype == "checkout.session.completed":
+        session = obj
+    
+        email = (
+            (session.get("customer_details") or {}).get("email")
+            or session.get("customer_email")
+            or ""
+        ).strip().lower()
+    
+        if email:
+            upsert_user(email)
+    
+            # ✅ ADD THIS BLOCK HERE
+            customer_id = session.get("customer")
+            if customer_id:
+                conn = get_conn()
+                cur = conn.cursor()
+                cur.execute(
+                    "UPDATE users SET stripe_customer_id=%s WHERE email=%s",
+                    (customer_id, email),
+                )
+                conn.commit()
+                cur.close()
+                conn.close()
+    
+            grant_pro_monthly_credits(email)
+    
+        return JSONResponse({"received": True})
+
+
+
 
     if etype.startswith("customer.subscription."):
         email = ((obj.get("metadata") or {}).get("email") or "").strip().lower()
         if email:
             update_user_subscription(email, obj)
+        return JSONResponse({"received": True})
+
+
+
+    
 
     if etype in ("invoice.payment_succeeded", "invoice.paid"):
-        # Email is stored in metadata we set on the subscription/session
         sub_details = obj.get("subscription_details") or {}
         email = ((sub_details.get("metadata") or {}).get("email") or "").strip().lower()
         if not email:
             email = ((obj.get("metadata") or {}).get("email") or "").strip().lower()
-
+    
         billing_reason = obj.get("billing_reason")
-        if email and billing_reason in ("subscription_create", "subscription_cycle"):
-            add_credits(email, 30)  # monthly credits
-
-    return JSONResponse({"received": True})
+    
+        # IMPORTANT: only grant credits on monthly renewals
+        if email and billing_reason == "subscription_cycle":
+            add_credits(email, 100)
+    
+        return JSONResponse({"received": True})
