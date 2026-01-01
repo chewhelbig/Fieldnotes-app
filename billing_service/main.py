@@ -35,7 +35,7 @@ def upsert_user(email: str) -> str:
 
 def grant_pro_monthly_credits(email: str):
     """
-    Set the user to Pro and grant 100 credits/month (and set current credits to 100).
+    Set the user to Pro and grant 80 credits/month (and set current credits to 80).
     Safe to call multiple times.
     """
     email = (email or "").strip().lower()
@@ -50,8 +50,8 @@ def grant_pro_monthly_credits(email: str):
         SET
           plan = 'pro',
           subscription_status = 'active',
-          monthly_allowance = 100,
-          credits_remaining = 100,
+          monthly_allowance = 80,
+          credits_remaining = 80,
           last_reset = CURRENT_DATE
         WHERE email = %s
         """,
@@ -195,7 +195,7 @@ async def webhook(request: Request):
             status = (obj.get("status") or "").lower()
             # ✅ When subscription becomes active/trialing, ensure Pro credits are granted
             if status in ("active", "trialing"):
-                grant_pro_monthly_credits(email)  # sets credits_remaining=100, monthly_allowance=100
+                grant_pro_monthly_credits(email)  # sets credits_remaining=80, monthly_allowance=80
     
         return JSONResponse({"received": True})
     
@@ -210,7 +210,7 @@ async def webhook(request: Request):
     
         # IMPORTANT: only grant credits on monthly renewals
         if email and billing_reason == "subscription_cycle":
-            add_credits(email, 100)
+            add_credits(email, 80)
     
         return JSONResponse({"received": True})
 
