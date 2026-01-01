@@ -187,16 +187,17 @@ async def webhook(request: Request):
         return JSONResponse({"received": True})
 
 
-
-
     if etype.startswith("customer.subscription."):
         email = ((obj.get("metadata") or {}).get("email") or "").strip().lower()
         if email:
             update_user_subscription(email, obj)
+    
+            status = (obj.get("status") or "").lower()
+            # ✅ When subscription becomes active/trialing, ensure Pro credits are granted
+            if status in ("active", "trialing"):
+                grant_pro_monthly_credits(email)  # sets credits_remaining=100, monthly_allowance=100
+    
         return JSONResponse({"received": True})
-
-
-
     
 
     if etype in ("invoice.payment_succeeded", "invoice.paid"):
