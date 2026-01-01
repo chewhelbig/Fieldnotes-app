@@ -43,7 +43,7 @@ def ensure_pg_schema():
     cur.close()
     conn.close()
 
-DEFAULT_MONTHLY_ALLOWANCE = 30
+DEFAULT_MONTHLY_ALLOWANCE = 100
 
 def pg_get_or_create_user(email: str):
     conn = get_pg_conn()
@@ -66,7 +66,7 @@ def pg_get_or_create_user(email: str):
         cur.execute(
             """
             INSERT INTO users (email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status)
-            VALUES (%s, 'free', 30, 30, CURRENT_DATE, 'free')
+            VALUES (%s, 'free', 15, 0, CURRENT_DATE, 'free')
             """,
             (email,),
         )
@@ -800,7 +800,7 @@ def main():
     
     # 1) Sign in (email)
     st.sidebar.markdown("### 👤 Sign in / Sign up")
-    st.sidebar.caption("Enter your email to create an account or continue. New users get 30 free credits.")
+    st.sidebar.caption("Enter your email to create an account or continue. New users get 15 free credits.")
     user_email = st.sidebar.text_input(
         "Email",
         value=st.session_state.get("user_email", ""),
@@ -821,7 +821,7 @@ def main():
         pg_maybe_reset_monthly(user_email)
         
         if created:
-            st.sidebar.success("Account created — 30 free credits added 🎁")
+            st.sidebar.success("Account created — 15 free credits added 🎁")
 
     
         if pg_user:
@@ -922,7 +922,7 @@ def main():
     if not email_ok:
         st.subheader("Welcome")
         st.write("Enter your email in the sidebar to sign in or create an account.")
-        st.write("New accounts start with **30 free credits**.")
+        st.write("New accounts start with **15 free credits**.")
         st.stop()
     
     # (Optional) invite-only gate (keeps your beta list behavior)
@@ -937,7 +937,7 @@ def main():
     is_subscribed = subscription_status in ("active", "trialing")
     
     if (not is_subscribed) and (credits_remaining <= 0):
-        st.warning("Free trial ended: you’ve used all 30 credits.")
+        st.warning("Free trial ended: you’ve used all 15 credits.")
         st.write("Subscribe (USD 29/month) or add credits to generate new outputs.")
     elif not is_subscribed:
         st.info(f"Free trial: {credits_remaining} credits remaining.")
