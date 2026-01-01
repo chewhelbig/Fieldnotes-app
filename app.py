@@ -43,7 +43,7 @@ def ensure_pg_schema():
     cur.close()
     conn.close()
 
-DEFAULT_MONTHLY_ALLOWANCE = 100
+DEFAULT_MONTHLY_ALLOWANCE = 80
 
 def pg_get_or_create_user(email: str):
     conn = get_pg_conn()
