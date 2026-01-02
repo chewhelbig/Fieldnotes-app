@@ -16,32 +16,36 @@ def get_pg_conn():
     if not url:
         return None
     # psycopg2 accepts the URL string directly
-    return psycopg2.connect(url)
+    return psycopg2.connect(url, sslmode="require")
+
 
 def ensure_pg_schema():
     conn = get_pg_conn()
     if conn is None:
         return  # no DATABASE_URL set, skip
-    cur = conn.cursor()
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-          email TEXT PRIMARY KEY,
-          plan TEXT DEFAULT 'free',
-          credits_remaining INT DEFAULT 0,
-          monthly_allowance INT DEFAULT 0,
-          last_reset DATE,
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+              email TEXT PRIMARY KEY,
+              plan TEXT DEFAULT 'free',
+              credits_remaining INT DEFAULT 0,
+              monthly_allowance INT DEFAULT 0,
+              last_reset DATE,
 
-          stripe_customer_id TEXT,
-          stripe_subscription_id TEXT,
-          subscription_status TEXT,
-          current_period_end TIMESTAMPTZ,
+              stripe_customer_id TEXT,
+              stripe_subscription_id TEXT,
+              subscription_status TEXT,
+              current_period_end TIMESTAMPTZ,
 
-          created_at TIMESTAMPTZ DEFAULT NOW()
-        );
-    """)
-    conn.commit()
-    cur.close()
-    conn.close()
+              created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+        conn.commit()
+        cur.close()
+    finally:
+        conn.close()
+
 
 DEFAULT_MONTHLY_ALLOWANCE = 100
 TRIAL_CREDITS = 7  # put this near your other constants
@@ -808,7 +812,7 @@ def main():
     
     # 1) Sign in (email)
     st.sidebar.markdown("### 👤 Sign in / Sign up")
-    st.sidebar.caption("Enter your email to create an account or continue. New users get 15 free credits.")
+    st.sidebar.caption("Enter your email to create an account or continue. New users get 7 free credits.")
     user_email = st.sidebar.text_input(
         "Email",
         value=st.session_state.get("user_email", ""),
