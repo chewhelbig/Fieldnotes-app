@@ -894,19 +894,22 @@ def main():
         # --- NEW: gate free trial only, allow subscription without invite ---
         existing_user = pg_get_user(user_email)
         
-        # Trial is allowed if:
-        # - user already exists (they’ve used the app before), OR
-        # - no invite code is configured (open trial), OR
-        # - invite code matches
-        trial_allowed = True
+        # If TRIAL_INVITE_CODE is set, NEW users do NOT get trial unless they enter it correctly.
+        trial_allowed = False
         
-        if TRIAL_INVITE_CODE and (existing_user is None):
+        if existing_user is not None:
+            trial_allowed = True  # existing users keep access to their existing credits/state
+        elif not TRIAL_INVITE_CODE:
+            trial_allowed = True  # open trial mode (no invite configured)
+        else:
             st.sidebar.markdown("### 🧾 Free trial (invite-only)")
-            invite = st.sidebar.text_input("Invite code (optional)", type="password").strip()
+            invite = st.sidebar.text_input("Invite code (required for free trial)", type="password").strip()
         
-            if invite != TRIAL_INVITE_CODE:
-                trial_allowed = False
+            if invite == TRIAL_INVITE_CODE:
+                trial_allowed = True
+            else:
                 st.sidebar.info("No invite? You can still subscribe below (paid plan).")
+
         
         # Create user ONLY if trial is allowed (or user already exists)
         if existing_user is not None:
