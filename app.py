@@ -886,16 +886,19 @@ def main():
         st.session_state["user_email"] = user_email
 
     
-        # --- NEW: allow existing users, gate only new users with invite code ---
+        # --- NEW: gate free trial only, allow subscription without invite ---
         existing_user = pg_get_user(user_email)
         
+        trial_allowed = True
         if (existing_user is None) and TRIAL_INVITE_CODE:
             st.sidebar.markdown("### 🧾 Trial access")
-            invite = st.sidebar.text_input("Invite code", type="password").strip()
+            invite = st.sidebar.text_input("Invite code (optional)", type="password").strip()
         
-        if invite != TRIAL_INVITE_CODE:
-            st.sidebar.info("Enter a valid invite code to unlock the free trial.")
-            # Prevent creating the user / showing subscription UI
+            if invite != TRIAL_INVITE_CODE:
+                trial_allowed = False
+
+           
+        # Prevent creating the user / showing subscription UI
 
 
         
