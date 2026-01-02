@@ -46,6 +46,7 @@ def ensure_pg_schema():
     finally:
         conn.close()
 
+TRIAL_INVITE_CODE = os.environ.get("TRIAL_INVITE_CODE", "").strip()
 
 DEFAULT_MONTHLY_ALLOWANCE = 100
 TRIAL_CREDITS = 7  # put this near your other constants
@@ -885,14 +886,26 @@ def main():
         st.session_state["user_email"] = user_email
 
     
-        # Ensure user exists + monthly reset
-        pg_user, created = pg_get_or_create_user(user_email)
-        
-        # If monthly reset updates the DB, we must re-fetch user afterwards
-        pg_maybe_reset_monthly(user_email)
-        
-        # ALWAYS re-fetch the latest user row (webhooks / resets may have changed it)
-        pg_user = pg_refresh_user(user_email)
+        # --- NEW: allow existing users, gate only new users with invite code ---
+existing_user = pg_get_user(user_email)
+
+if (existing_user is None) and TRIAL_INVITE_CODE:
+    st.sidebar.markdown("### 🧾 Trial access")
+    invite = st.sidebar.text_input("Invite code", type="password").strip()
+
+    if invite != TRIAL_INVITE_CODE:
+        st.sidebar.info("Enter a valid invite code to unlock the free trial.")
+        st.stop()
+
+# Ensure user exists + monthly reset (only reached if existing OR invite ok)
+pg_user, created = pg_get_or_create_user(user_email)
+
+# If monthly reset updates the DB, we must re-fetch user afterwards
+pg_maybe_reset_monthly(user_email)
+
+# ALWAYS re-fetch the latest user row (webhooks / resets may have changed it)
+pg_user = pg_refresh_user(user_email)
+
         
         if created:
             st.sidebar.success("Account created — 7 free credits added 🎁")
