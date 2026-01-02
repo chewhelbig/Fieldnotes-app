@@ -15,7 +15,11 @@ PRICE_ID = os.environ.get("STRIPE_PRICE_ID_MONTHLY", "")
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "https://fieldnotes-app-1.onrender.com").rstrip("/")
 
 def get_conn():
-    return psycopg2.connect(os.environ["DATABASE_URL"])
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        raise RuntimeError("DATABASE_URL is missing")
+    return psycopg2.connect(url)
+
 
 def upsert_user(email: str) -> str:
     email = (email or "").strip().lower()
@@ -49,7 +53,6 @@ def grant_pro_monthly_credits(email: str):
         UPDATE users
         SET
           plan = 'pro',
-          subscription_status = 'active',
           monthly_allowance = 100,
           credits_remaining = 100,
           last_reset = CURRENT_DATE
@@ -62,7 +65,11 @@ def grant_pro_monthly_credits(email: str):
     conn.close()
 
 
+
 def update_user_subscription(email: str, sub_obj: dict):
+    email = (email or "").strip().lower()
+    if not email:
+        return
     status = sub_obj.get("status")
     customer_id = sub_obj.get("customer")
     sub_id = sub_obj.get("id")
@@ -210,7 +217,8 @@ async def webhook(request: Request):
     
         # IMPORTANT: only grant credits on monthly renewals
         if email and billing_reason == "subscription_cycle":
-            add_credits(email, 100)
+            grant_pro_monthly_credits(email)  # sets credits_remaining=100 cleanly
+
     
         return JSONResponse({"received": True})
 
