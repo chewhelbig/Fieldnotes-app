@@ -219,7 +219,20 @@ async def webhook(request: Request):
             status = (obj.get("status") or "").lower()
             # ✅ When subscription becomes active/trialing, ensure Pro credits are granted
             if status in ("active", "trialing"):
-                grant_pro_monthly_credits(email)  # sets credits_remaining=100, monthly_allowance=100
+                # Only grant credits if user has no monthly allowance yet
+                conn = get_conn()
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT monthly_allowance FROM users WHERE email=%s",
+                    (email,),
+                )
+                row = cur.fetchone()
+                cur.close()
+                conn.close()
+            
+                if not row or not row[0]:
+                    grant_pro_monthly_credits(email)
+
     
         return JSONResponse({"received": True})
     
