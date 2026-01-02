@@ -44,44 +44,41 @@ def ensure_pg_schema():
     conn.close()
 
 DEFAULT_MONTHLY_ALLOWANCE = 100
-TRIAL_CREDITS = 7
+TRIAL_CREDITS = 7  # put this near your other constants
 
 def pg_get_or_create_user(email: str):
     conn = get_pg_conn()
     cur = conn.cursor()
+
+    # 1) Try to fetch existing user
     cur.execute(
         """
-        INSERT INTO users (
-            email,
-            plan,
-            credits_remaining,
-            monthly_allowance,
-            last_reset,
-            subscription_status
-        )
-        VALUES (%s, 'free', %s, 0, CURRENT_DATE, 'free')
-        ON CONFLICT (email) DO NOTHING
+        SELECT email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status
+        FROM users
+        WHERE email = %s
         """,
-        (email, TRIAL_CREDITS),
+        (email,),
     )
-
-
-
     row = cur.fetchone()
 
     created = False
 
+    # 2) If not found, insert a trial user (safe under Streamlit reruns)
     if not row:
-        created = True
         cur.execute(
             """
-            INSERT INTO users (email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status)
-            VALUES (%s, 'free', 15, 0, CURRENT_DATE, 'free')
+            INSERT INTO users (
+                email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status
+            )
+            VALUES (%s, 'free', %s, 0, CURRENT_DATE, 'free')
+            ON CONFLICT (email) DO NOTHING
             """,
-            (email,),
+            (email, TRIAL_CREDITS),
         )
         conn.commit()
+        created = True
 
+        # 3) Fetch again (now it must exist)
         cur.execute(
             """
             SELECT email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status
@@ -95,6 +92,7 @@ def pg_get_or_create_user(email: str):
     cur.close()
     conn.close()
     return row, created
+
 
 
 def pg_maybe_reset_monthly(email: str):
