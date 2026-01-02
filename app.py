@@ -49,14 +49,15 @@ TRIAL_CREDITS = 7
 def pg_get_or_create_user(email: str):
     conn = get_pg_conn()
     cur = conn.cursor()
-
     cur.execute(
         """
         INSERT INTO users (email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status)
-        VALUES (%s, 'free', %s, 0, CURRENT_DATE, 'free')
+        VALUES (%s, 'free', 15, 0, CURRENT_DATE, 'free')
+        ON CONFLICT (email) DO NOTHING
         """,
-        (email, TRIAL_CREDITS),
+        (email,),
     )
+
 
     row = cur.fetchone()
 
