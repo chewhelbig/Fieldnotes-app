@@ -1089,11 +1089,17 @@ def main():
         st.subheader("Welcome")
         st.write("Enter your email in the sidebar to sign in or create an account.")
         if TRIAL_INVITE_CODE:
-            st.write("Free trial is **invite-only**. You can still subscribe without an invite.")
+            st.write("Free trial is **invite-only**. [Request free 7 credits](https://psychotherapist.sg/fieldnotes). You can still subscribe to use immediately.")
         else:
             st.write("New accounts start with **7 free credits**.")
 
         st.stop()
+
+
+                    "No free trial active. "
+                    "[Request free 7 credits](https://psychotherapist.sg/fieldnotes) "
+                    "or subscribe to use."
+             
     
     # (Optional) invite-only gate (keeps your beta list behavior)
    
