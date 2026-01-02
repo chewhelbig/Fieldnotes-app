@@ -51,39 +51,28 @@ TRIAL_INVITE_CODE = os.environ.get("TRIAL_INVITE_CODE", "").strip()
 DEFAULT_MONTHLY_ALLOWANCE = 100
 TRIAL_CREDITS = 7  # put this near your other constants
 
-def pg_get_or_create_user(email: str):
+def pg_get_or_create_user(email: str, grant_trial: bool = False):
+    """
+    Drop-in replacement (safer):
+    - If user exists: returns the user row, created=False
+    - If user does not exist:
+        - grant_trial=False -> creates user with 0 credits (safe default)
+        - grant_trial=True  -> creates user with TRIAL_CREDITS
+    Returns: (row, created)
+    Row shape matches: (email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status)
+    """
+    email = (email or "").strip().lower()
+    if not email:
+        return None, False
+
     conn = get_pg_conn()
-    cur = conn.cursor()
+    if conn is None:
+        return None, False
 
-    # 1) Try to fetch existing user
-    cur.execute(
-        """
-        SELECT email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status
-        FROM users
-        WHERE email = %s
-        """,
-        (email,),
-    )
-    row = cur.fetchone()
+    try:
+        cur = conn.cursor()
 
-    created = False
-
-    # 2) If not found, insert a trial user (safe under Streamlit reruns)
-    if not row:
-        cur.execute(
-            """
-            INSERT INTO users (
-                email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status
-            )
-            VALUES (%s, 'free', %s, 0, CURRENT_DATE, 'free')
-            ON CONFLICT (email) DO NOTHING
-            """,
-            (email, TRIAL_CREDITS),
-        )
-        conn.commit()
-        created = True
-
-        # 3) Fetch again (now it must exist)
+        # 1) Try fetch
         cur.execute(
             """
             SELECT email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status
@@ -93,10 +82,41 @@ def pg_get_or_create_user(email: str):
             (email,),
         )
         row = cur.fetchone()
+        if row:
+            cur.close()
+            return row, False
 
-    cur.close()
-    conn.close()
-    return row, created
+        # 2) Not found -> insert with safe default credits
+        starting_credits = TRIAL_CREDITS if grant_trial else 0
+        plan = "free"  # keep 'free' unless you explicitly set 'pro' elsewhere
+
+        cur.execute(
+            """
+            INSERT INTO users (
+                email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status
+            )
+            VALUES (%s, %s, %s, 0, CURRENT_DATE, 'free')
+            ON CONFLICT (email) DO NOTHING
+            """,
+            (email, plan, starting_credits),
+        )
+        conn.commit()
+
+        # 3) Fetch again
+        cur.execute(
+            """
+            SELECT email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status
+            FROM users
+            WHERE email = %s
+            """,
+            (email,),
+        )
+        row = cur.fetchone()
+        cur.close()
+        return row, True
+
+    finally:
+        conn.close()
 
 
 
@@ -918,7 +938,8 @@ def main():
             pg_user = existing_user
             created = False
         elif trial_allowed:
-            pg_user, created = pg_get_or_create_user(user_email)  # grants 7 trial credits
+            pg_user, created = pg_get_or_create_user(user_email, grant_trial=True)
+         
         else:
             pg_user = None
             created = False
