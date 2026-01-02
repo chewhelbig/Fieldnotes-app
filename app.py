@@ -44,6 +44,7 @@ def ensure_pg_schema():
     conn.close()
 
 DEFAULT_MONTHLY_ALLOWANCE = 100
+TRIAL_CREDITS = 7
 
 def pg_get_or_create_user(email: str):
     conn = get_pg_conn()
@@ -51,12 +52,12 @@ def pg_get_or_create_user(email: str):
 
     cur.execute(
         """
-        SELECT email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status
-        FROM users
-        WHERE email = %s
+        INSERT INTO users (email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status)
+        VALUES (%s, 'free', %s, 0, CURRENT_DATE, 'free')
         """,
-        (email,),
+        (email, TRIAL_CREDITS),
     )
+
     row = cur.fetchone()
 
     created = False
@@ -821,7 +822,7 @@ def main():
         pg_maybe_reset_monthly(user_email)
         
         if created:
-            st.sidebar.success("Account created — 15 free credits added 🎁")
+            st.sidebar.success("Account created — 7 free credits added 🎁")
 
     
         if pg_user:
@@ -831,6 +832,10 @@ def main():
         st.sidebar.caption(f"Credits remaining: {credits_remaining}")
     else:
         st.sidebar.info("Enter your email to continue.")
+    
+    if subscription_status not in ("active", "trialing") and credits_remaining == 2:
+        st.sidebar.info("Most clinicians upgrade once this becomes part of their workflow.")
+
     
     st.sidebar.markdown("---")
     
@@ -922,7 +927,7 @@ def main():
     if not email_ok:
         st.subheader("Welcome")
         st.write("Enter your email in the sidebar to sign in or create an account.")
-        st.write("New accounts start with **15 free credits**.")
+        st.write("New accounts start with **7 free credits**.")
         st.stop()
     
     # (Optional) invite-only gate (keeps your beta list behavior)
@@ -937,7 +942,7 @@ def main():
     is_subscribed = subscription_status in ("active", "trialing")
     
     if (not is_subscribed) and (credits_remaining <= 0):
-        st.warning("Free trial ended: you’ve used all 15 credits.")
+        st.warning("Free trial ended: you’ve used all 7 credits.")
         st.write("Subscribe (USD 29/month) or add credits to generate new outputs.")
     elif not is_subscribed:
         st.info(f"Free trial: {credits_remaining} credits remaining.")
@@ -1013,11 +1018,7 @@ def main():
     
         combined_narrative = narrative
     
-        # 1) NOTES — atomic deduct BEFORE calling OpenAI
-        if not pg_try_deduct_credits(user_email, COST_GENERATE_NOTES):
-            st.warning("Not enough credits to generate notes. Please top up.")
-            st.stop()
-        
+        # 1) NOTES — call OpenAI first; deduct ONLY after success
         try:
             with st.spinner("Generating clinical notes..."):
                 notes_text = call_openai(
@@ -1026,11 +1027,15 @@ def main():
                     output_mode
                 )
         except Exception as e:
-            # refund credits if OpenAI fails
-            pg_add_credits(user_email, COST_GENERATE_NOTES)
-            st.error("OpenAI request failed. Your credits were refunded.")
+            st.error("OpenAI request failed. No credits were used.")
             st.exception(e)
             st.stop()
+        
+        # Deduct ONLY after success
+        if not pg_try_deduct_credits(user_email, COST_GENERATE_NOTES):
+            st.warning("Not enough credits to save this generation. Please top up and try again.")
+            st.stop()
+
         
         st.session_state["notes_text"] = notes_text
         st.session_state["gen_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M")
@@ -1039,10 +1044,7 @@ def main():
         if generate_reflection:
             cost = REFLECTION_COST.get(reflection_intensity, 1)
     
-            if not pg_try_deduct_credits(user_email, cost):
-                st.warning("Not enough credits to generate reflection. Please top up.")
-                st.stop()
-            
+            # REFLECTION — call OpenAI first; deduct ONLY after success
             try:
                 with st.spinner("Generating therapist reflection / supervision view..."):
                     reflection = call_reflection_engine(
@@ -1052,16 +1054,25 @@ def main():
                         intensity=reflection_intensity,
                     )
             except Exception as e:
-                # refund credits if OpenAI fails
-                pg_add_credits(user_email, cost)
-                st.error("Reflection generation failed. Your credits were refunded.")
+                st.error("Reflection generation failed. No credits were used.")
                 st.exception(e)
+                st.stop()
+            
+            # Deduct ONLY after success
+            if not pg_try_deduct_credits(user_email, cost):
+                st.warning("Not enough credits to save this reflection. Please top up and try again.")
                 st.stop()
     
             st.session_state["reflection_text"] = reflection
         else:
             st.session_state["reflection_text"] = ""
-
+   
+    # Refresh credits/status from DB so sidebar updates on rerun
+    pg_user = pg_get_user(user_email)
+    if pg_user:
+        credits_remaining = int(pg_user[2] or 0)
+        subscription_status = (pg_user[5] or "").lower()
+    
 
 
     # ALWAYS read from session_state (survives reruns + downloads)
