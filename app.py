@@ -178,6 +178,14 @@ def pg_get_user(email: str):
     finally:
         conn.close()
 
+def pg_refresh_user(email: str):
+    """
+    Always fetch the latest user row from Postgres.
+    Returns the same shape as pg_get_user:
+    (email, plan, credits_remaining, monthly_allowance, last_reset,
+     subscription_status, stripe_customer_id, stripe_subscription_id)
+    """
+    return pg_get_user(email)
 
 
 # ===== credit ============
@@ -839,6 +847,15 @@ Respond in a supervisor-style reflective tone, grounded in Gestalt field theory.
 def main():
  
     ensure_pg_schema()
+
+    # ---- Stripe return handling: force refresh after checkout ----
+    params = st.query_params
+    if params.get("success") == "1":
+        st.success("Payment successful — syncing subscription & credits…")
+        # Remove the success flag so it doesn't repeat on every rerun
+        st.query_params.clear()
+        st.rerun()
+
     if not os.environ.get("DATABASE_URL"):
         st.error("Server misconfiguration: DATABASE_URL is missing (Render env var).")
         st.stop()
