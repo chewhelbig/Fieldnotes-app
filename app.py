@@ -896,7 +896,6 @@ def main():
         if invite != TRIAL_INVITE_CODE:
             st.sidebar.info("Enter a valid invite code to unlock the free trial.")
             # Prevent creating the user / showing subscription UI
-            email_ok = False
 
 
         
