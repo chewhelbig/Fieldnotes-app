@@ -916,10 +916,11 @@ def main():
             pg_user = existing_user
             created = False
         elif trial_allowed:
-            pg_user, created = pg_get_or_create_user(user_email)  # this grants 7 trial credits
+            pg_user, created = pg_get_or_create_user(user_email)  # grants 7 trial credits
         else:
             pg_user = None
             created = False
+
 
         if pg_user:
             pg_maybe_reset_monthly(user_email)
