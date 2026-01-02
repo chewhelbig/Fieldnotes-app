@@ -998,6 +998,7 @@ def main():
         if not is_subscribed:
             st.sidebar.warning("Paid plan: USD 29/month")
             st.sidebar.caption("Subscription unlocks 100 credits/month.")
+            st.sidebar.caption("Credits reset monthly. Unused credits do not roll over.")
 
             if st.sidebar.button("Subscribe USD 29/month", key="btn_subscribe_monthly"):
                 try:
