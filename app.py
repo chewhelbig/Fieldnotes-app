@@ -887,27 +887,36 @@ def main():
     
         # Ensure user exists + monthly reset
         pg_user, created = pg_get_or_create_user(user_email)
+        
+        # If monthly reset updates the DB, we must re-fetch user afterwards
         pg_maybe_reset_monthly(user_email)
+        
+        # ALWAYS re-fetch the latest user row (webhooks / resets may have changed it)
+        pg_user = pg_refresh_user(user_email)
         
         if created:
             st.sidebar.success("Account created — 7 free credits added 🎁")
-
-    
+        
         if pg_user:
             credits_remaining = int(pg_user[2] or 0)
             subscription_status = (pg_user[5] or "").lower()
+
     
         label = "Credits remaining"
         if subscription_status not in ("active", "trialing"):
             label = "Trial credits remaining"
         st.sidebar.caption(f"{label}: {credits_remaining}")
+        # Manual refresh (only show when not yet active)
+        if subscription_status not in ("active", "trialing"):
+            if st.sidebar.button("🔄 Refresh credits/subscription"):
+                st.rerun()
+            st.sidebar.caption("Use this after payment if credits don’t update immediately.")
 
     else:
         st.sidebar.info("Enter your email to continue.")
     
     if email_ok and subscription_status not in ("active", "trialing") and credits_remaining == 2:
         st.sidebar.info("Most clinicians upgrade once this becomes part of their workflow.")
-
 
     
     st.sidebar.markdown("---")
