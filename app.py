@@ -159,34 +159,46 @@ def is_admin(email: str) -> bool:
 
 def pg_get_user(email: str):
     conn = get_pg_conn()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT email, plan, credits_remaining, monthly_allowance, last_reset,
-               subscription_status, stripe_customer_id, stripe_subscription_id
-        FROM users WHERE email=%s
-    """, (email,))
-    row = cur.fetchone()
-    cur.close()
-    conn.close()
-    return row
+    if conn is None:
+        return None
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT email, plan, credits_remaining, monthly_allowance, last_reset,
+                   subscription_status, stripe_customer_id, stripe_subscription_id
+            FROM users WHERE email=%s
+        """, (email,))
+        row = cur.fetchone()
+        cur.close()
+        return row
+    finally:
+        conn.close()
 
 
 # ===== credit ============
 
 def pg_deduct_credit(email: str) -> bool:
     conn = get_pg_conn()
-    cur = conn.cursor()
-    cur.execute("""
-        UPDATE users
-        SET credits_remaining = credits_remaining - 1
-        WHERE email=%s AND credits_remaining > 0
-        RETURNING credits_remaining
-    """, (email,))
-    ok = cur.fetchone() is not None
-    conn.commit()
-    cur.close()
-    conn.close()
-    return ok
+    if conn is None:
+        return False
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE users
+            SET credits_remaining = credits_remaining - 1
+            WHERE email=%s AND credits_remaining > 0
+            RETURNING credits_remaining
+        """, (email,))
+        ok = cur.fetchone() is not None
+        conn.commit()
+        cur.close()
+        return ok
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
 
 def pg_try_deduct_credits(email: str, amount: int) -> bool:
     """Atomically deduct `amount` credits if available. Returns True if deducted."""
@@ -194,32 +206,52 @@ def pg_try_deduct_credits(email: str, amount: int) -> bool:
         return True
 
     conn = get_pg_conn()
-    cur = conn.cursor()
-    cur.execute("""
-        UPDATE users
-        SET credits_remaining = credits_remaining - %s
-        WHERE email = %s AND credits_remaining >= %s
-        RETURNING credits_remaining
-    """, (amount, email, amount))
-    ok = cur.fetchone() is not None
-    conn.commit()
-    cur.close()
-    conn.close()
-    return ok
+    if conn is None:
+        return False  # can't deduct without DB
+
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE users
+            SET credits_remaining = credits_remaining - %s
+            WHERE email = %s AND credits_remaining >= %s
+            RETURNING credits_remaining
+            """,
+            (amount, email, amount),
+        )
+        ok = cur.fetchone() is not None
+        conn.commit()
+        cur.close()
+        return ok
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
 
 def pg_add_credits(email: str, amount: int) -> None:
     if amount <= 0:
         return
     conn = get_pg_conn()
-    cur = conn.cursor()
-    cur.execute("""
-        UPDATE users
-        SET credits_remaining = credits_remaining + %s
-        WHERE email = %s
-    """, (amount, email))
-    conn.commit()
-    cur.close()
-    conn.close()
+    if conn is None:
+        return
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE users
+            SET credits_remaining = credits_remaining + %s
+            WHERE email = %s
+        """, (amount, email))
+        conn.commit()
+        cur.close()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
 
 
 
@@ -1029,12 +1061,10 @@ def main():
         if not email_ok:
             st.warning("Please enter your email in the sidebar to continue.")
             st.stop()
-        if (credits_remaining <= 0) and (subscription_status not in ("active", "trialing")):
-            st.warning("Free trial ended. Please subscribe (USD 29/month) or add credits to continue.")
-            st.stop()
-
+       
+        
         # If not subscribed, credits must be > 0 (free trial)
-        if (credits_remaining <= 0) and (subscription_status not in ("active", "trialing")):
+        if credits_remaining <= 0 and subscription_status not in ("active", "trialing"):
             st.warning("Free trial ended. Please subscribe (USD 29/month) or add credits to continue.")
             st.stop()
 
@@ -1043,6 +1073,7 @@ def main():
             st.warning("Please enter a session narrative first.")
             st.stop()
 
+        
             
         # (optional) require subscription / credits here
     
@@ -1096,14 +1127,10 @@ def main():
             st.session_state["reflection_text"] = reflection
         else:
             st.session_state["reflection_text"] = ""
+        
+        
+        st.rerun()
    
-    # Refresh credits/status from DB so sidebar updates on rerun
-    pg_user = pg_get_user(user_email)
-    if pg_user:
-        credits_remaining = int(pg_user[2] or 0)
-        subscription_status = (pg_user[5] or "").lower()
-    
-
 
     # ALWAYS read from session_state (survives reruns + downloads)
     notes_text = st.session_state.get("notes_text", "")
