@@ -826,7 +826,10 @@ def main():
     subscription_status = ""
     
     if email_ok:
+        if st.session_state.get("user_email") != user_email:
+            st.session_state.pop("checkout_url", None)
         st.session_state["user_email"] = user_email
+
     
         # Ensure user exists + monthly reset
         pg_user, created = pg_get_or_create_user(user_email)
@@ -840,12 +843,17 @@ def main():
             credits_remaining = int(pg_user[2] or 0)
             subscription_status = (pg_user[5] or "").lower()
     
-        st.sidebar.caption(f"Credits remaining: {credits_remaining}")
+        label = "Credits remaining"
+        if subscription_status not in ("active", "trialing"):
+            label = "Trial credits remaining"
+        st.sidebar.caption(f"{label}: {credits_remaining}")
+
     else:
         st.sidebar.info("Enter your email to continue.")
     
-    if subscription_status not in ("active", "trialing") and credits_remaining == 2:
+    if email_ok and subscription_status not in ("active", "trialing") and credits_remaining == 2:
         st.sidebar.info("Most clinicians upgrade once this becomes part of their workflow.")
+
 
     
     st.sidebar.markdown("---")
@@ -862,15 +870,26 @@ def main():
         if not is_subscribed:
             st.sidebar.warning("Subscription required (USD 29/month).")
             if st.sidebar.button("Subscribe USD 29/month", key="btn_subscribe_monthly"):
-                r = requests.post(
-                    f"{BILLING_API_URL}/create-checkout-session",
-                    json={"email": user_email},
-                    timeout=30,
-                )
-                r.raise_for_status()
-                st.sidebar.link_button("Open Stripe Checkout", r.json()["url"])
+                try:
+                    r = requests.post(
+                        f"{BILLING_API_URL}/create-checkout-session",
+                        json={"email": user_email},
+                        timeout=30,
+                    )
+                    r.raise_for_status()
+                    st.session_state["checkout_url"] = r.json()["url"]
+                except Exception as e:
+                    st.sidebar.error("Could not start checkout. Please try again.")
+                    st.sidebar.exception(e)
+            
+            checkout_url = st.session_state.get("checkout_url")
+            if checkout_url:
+                st.sidebar.link_button("Open Stripe Checkout", checkout_url)
+
         else:
             st.sidebar.success("Subscription: active")
+            st.session_state.pop("checkout_url", None)
+
     
             # Optional: Add credits button (depends on your billing backend)
             # If you already built a credits checkout endpoint, set it here:
