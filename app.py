@@ -1106,8 +1106,11 @@ def main():
     # --- Trial / billing status (informational only; do NOT stop the app UI) ---
     is_subscribed = subscription_status in ("active", "trialing")
     
-    if (not is_subscribed) and (credits_remaining <= 0):
-        if subscription_status not in ("active", "trialing") and credits_remaining <= 0:
+    # --- Trial / billing status (informational only; do NOT stop the app UI) ---
+    is_subscribed = subscription_status in ("active", "trialing")
+    
+    if not is_subscribed:
+        if credits_remaining <= 0:
             if pg_user is None:
                 st.warning(
                     "No free trial active. "
@@ -1121,16 +1124,10 @@ def main():
                     "Please subscribe to continue."
                 )
                 st.stop()
-    
-            st.write("Subscribe (USD 29/month) or add credits to generate new outputs.")
-        elif not is_subscribed:
-            st.info(f"Free trial: {credits_remaining} credits remaining.")
         else:
-            st.success("Subscription active.")
-
-
-    
-  
+            st.info(f"Free trial: {credits_remaining} credits remaining.")
+    else:
+        st.success("Subscription active.")
 
 
 
