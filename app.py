@@ -867,7 +867,12 @@ def main():
     
     # 1) Sign in (email)
     st.sidebar.markdown("### 👤 Sign in / Sign up")
-    st.sidebar.caption("Enter your email to create an account or continue. New users get 7 free credits.")
+    # Caption changes depending on trial eligibility
+    if os.environ.get("TRIAL_INVITE_CODE", "").strip():
+        st.sidebar.caption("Enter your email to continue. Free trial is invite-only. You can still subscribe without an invite.")
+    else:
+        st.sidebar.caption("Enter your email to create an account or continue. New users get 7 free credits.")
+
     user_email = st.sidebar.text_input(
         "Email",
         value=st.session_state.get("user_email", ""),
@@ -889,29 +894,46 @@ def main():
         # --- NEW: gate free trial only, allow subscription without invite ---
         existing_user = pg_get_user(user_email)
         
+        # Trial is allowed if:
+        # - user already exists (they’ve used the app before), OR
+        # - no invite code is configured (open trial), OR
+        # - invite code matches
         trial_allowed = True
-        if (existing_user is None) and TRIAL_INVITE_CODE:
-            st.sidebar.markdown("### 🧾 Trial access")
+        
+        if TRIAL_INVITE_CODE and (existing_user is None):
+            st.sidebar.markdown("### 🧾 Free trial (invite-only)")
             invite = st.sidebar.text_input("Invite code (optional)", type="password").strip()
         
             if invite != TRIAL_INVITE_CODE:
                 trial_allowed = False
-
-           
-        # Prevent creating the user / showing subscription UI
-
-
+                st.sidebar.info("No invite? You can still subscribe below (paid plan).")
         
-        # Ensure user exists + monthly reset (only reached if existing OR invite ok)
-        pg_user, created = pg_get_or_create_user(user_email)
+        # Create user ONLY if trial is allowed (or user already exists)
+        if existing_user is not None:
+            pg_user = existing_user
+            created = False
+        elif trial_allowed:
+            pg_user, created = pg_get_or_create_user(user_email)  # this grants 7 trial credits
+        else:
+            pg_user = None
+            created = False
+
+        else:
+            pg_user = pg_get_user(user_email)
+            created = False
         
+                
         # If monthly reset updates the DB, we must re-fetch user afterwards
         pg_maybe_reset_monthly(user_email)
         
         # ALWAYS re-fetch the latest user row (webhooks / resets may have changed it)
         pg_user = pg_refresh_user(user_email)
 
-        
+        if pg_user:
+            pg_maybe_reset_monthly(user_email)
+            pg_user = pg_refresh_user(user_email)
+
+
         if created:
             st.sidebar.success("Account created — 7 free credits added 🎁")
         
@@ -924,6 +946,15 @@ def main():
         if subscription_status not in ("active", "trialing"):
             label = "Trial credits remaining"
         st.sidebar.caption(f"{label}: {credits_remaining}")
+        # Labels for trial vs paid
+        if subscription_status in ("active", "trialing"):
+            st.sidebar.caption("Plan: Paid (subscription)")
+        else:
+            if pg_user is not None and credits_remaining > 0:
+                st.sidebar.caption("Plan: Free trial (no card required)")
+            else:
+                st.sidebar.caption("Plan: Not active (subscribe to use)")
+
         # Manual refresh (only show when not yet active)
         if subscription_status not in ("active", "trialing"):
             if st.sidebar.button("🔄 Refresh credits/subscription"):
@@ -949,7 +980,9 @@ def main():
         st.sidebar.caption("Enter email first to subscribe.")
     else:
         if not is_subscribed:
-            st.sidebar.warning("Subscription required (USD 29/month).")
+            st.sidebar.warning("Paid plan: USD 29/month")
+            st.sidebar.caption("Subscription unlocks 100 credits/month.")
+
             if st.sidebar.button("Subscribe USD 29/month", key="btn_subscribe_monthly"):
                 try:
                     r = requests.post(
