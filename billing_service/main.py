@@ -18,7 +18,8 @@ def get_conn():
     url = os.environ.get("DATABASE_URL")
     if not url:
         raise RuntimeError("DATABASE_URL is missing")
-    return psycopg2.connect(url)
+    return psycopg2.connect(url, sslmode="require")
+
 
 
 def upsert_user(email: str) -> str:
@@ -112,7 +113,10 @@ def health():
 
 @app.post("/create-checkout-session")
 async def create_checkout_session(payload: dict):
-    email = upsert_user(payload.get("email"))
+    email = (payload.get("email") or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="email required")
+
 
     session = stripe.checkout.Session.create(
         mode="subscription",
