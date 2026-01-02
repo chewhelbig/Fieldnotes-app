@@ -22,21 +22,34 @@ def get_conn():
 
 
 
-def upsert_user(email: str) -> str:
+def upsert_user(email: str):
+    """
+    Safe upsert:
+    - Ensures the user row exists
+    - Does NOT grant trial credits
+    - Leaves credits_remaining unchanged if user already exists
+    """
     email = (email or "").strip().lower()
     if not email:
-        raise HTTPException(status_code=400, detail="email required")
+        return None
+
     conn = get_conn()
     cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO users (email)
-        VALUES (%s)
+
+    # Insert user if missing with 0 credits (safe default)
+    cur.execute(
+        """
+        INSERT INTO users (email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status)
+        VALUES (%s, 'free', 0, 0, CURRENT_DATE, 'free')
         ON CONFLICT (email) DO NOTHING
-    """, (email,))
+        """,
+        (email,),
+    )
     conn.commit()
     cur.close()
     conn.close()
     return email
+
 
 def grant_pro_monthly_credits(email: str):
     """
