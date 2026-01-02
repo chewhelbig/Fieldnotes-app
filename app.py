@@ -1096,10 +1096,6 @@ def main():
         st.stop()
 
 
-                    "No free trial active. "
-                    "[Request free 7 credits](https://psychotherapist.sg/fieldnotes) "
-                    "or subscribe to use."
-             
     
     # (Optional) invite-only gate (keeps your beta list behavior)
    
