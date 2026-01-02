@@ -868,10 +868,11 @@ def main():
     # 1) Sign in (email)
     st.sidebar.markdown("### 👤 Sign in / Sign up")
     # Caption changes depending on trial eligibility
-    if os.environ.get("TRIAL_INVITE_CODE", "").strip():
+    if TRIAL_INVITE_CODE:
         st.sidebar.caption("Enter your email to continue. Free trial is invite-only. You can still subscribe without an invite.")
     else:
         st.sidebar.caption("Enter your email to create an account or continue. New users get 7 free credits.")
+
 
     user_email = st.sidebar.text_input(
         "Email",
@@ -884,6 +885,7 @@ def main():
     pg_user = None
     credits_remaining = 0
     subscription_status = ""
+    created = False
     
     if email_ok:
         if st.session_state.get("user_email") != user_email:
@@ -1064,7 +1066,11 @@ def main():
     if not email_ok:
         st.subheader("Welcome")
         st.write("Enter your email in the sidebar to sign in or create an account.")
-        st.write("New accounts start with **7 free credits**.")
+        if TRIAL_INVITE_CODE:
+            st.write("Free trial is **invite-only**. You can still subscribe without an invite.")
+        else:
+            st.write("New accounts start with **7 free credits**.")
+
         st.stop()
     
     # (Optional) invite-only gate (keeps your beta list behavior)
