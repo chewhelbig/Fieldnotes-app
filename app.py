@@ -921,17 +921,6 @@ def main():
             pg_user = None
             created = False
 
-        else:
-            pg_user = pg_get_user(user_email)
-            created = False
-        
-                
-        # If monthly reset updates the DB, we must re-fetch user afterwards
-        pg_maybe_reset_monthly(user_email)
-        
-        # ALWAYS re-fetch the latest user row (webhooks / resets may have changed it)
-        pg_user = pg_refresh_user(user_email)
-
         if pg_user:
             pg_maybe_reset_monthly(user_email)
             pg_user = pg_refresh_user(user_email)
