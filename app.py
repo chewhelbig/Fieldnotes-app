@@ -51,12 +51,20 @@ def pg_get_or_create_user(email: str):
     cur = conn.cursor()
     cur.execute(
         """
-        INSERT INTO users (email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status)
-        VALUES (%s, 'free', 15, 0, CURRENT_DATE, 'free')
+        INSERT INTO users (
+            email,
+            plan,
+            credits_remaining,
+            monthly_allowance,
+            last_reset,
+            subscription_status
+        )
+        VALUES (%s, 'free', %s, 0, CURRENT_DATE, 'free')
         ON CONFLICT (email) DO NOTHING
         """,
-        (email,),
+        (email, TRIAL_CREDITS),
     )
+
 
 
     row = cur.fetchone()
