@@ -893,9 +893,10 @@ def main():
             st.sidebar.markdown("### 🧾 Trial access")
             invite = st.sidebar.text_input("Invite code", type="password").strip()
         
-            if invite != TRIAL_INVITE_CODE:
-                st.sidebar.info("Enter a valid invite code to unlock the free trial.")
-                st.stop()
+        if invite != TRIAL_INVITE_CODE:
+            st.sidebar.info("Enter a valid invite code to unlock the free trial.")
+            st.stop()
+
         
         # Ensure user exists + monthly reset (only reached if existing OR invite ok)
         pg_user, created = pg_get_or_create_user(user_email)
