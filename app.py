@@ -158,6 +158,10 @@ def is_admin(email: str) -> bool:
     return bool(email) and email.strip().lower() in ADMIN_EMAILS
 
 def pg_get_user(email: str):
+    email = (email or "").strip().lower()
+    if not email:
+        return None
+
     conn = get_pg_conn()
     if conn is None:
         return None
@@ -173,6 +177,7 @@ def pg_get_user(email: str):
         return row
     finally:
         conn.close()
+
 
 
 # ===== credit ============
