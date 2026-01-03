@@ -296,14 +296,9 @@ def require_app_password_sidebar() -> bool:
     if not pwd:
         return True  # no password set → open
 
-    access_ok = require_app_password_sidebar()
-    
-    if not access_ok:
-        st.title("FieldNotes - Session Companion")
-        st.info("Enter the access password in the sidebar to enable generation.")
-        # do NOT stop — let the rest of the UI render
-
-
+    if st.session_state.get("access_ok"):
+        st.sidebar.caption("Access: enabled")
+        return True
 
     st.sidebar.markdown("### 🔒 Access")
     entered = st.sidebar.text_input(
@@ -319,9 +314,9 @@ def require_app_password_sidebar() -> bool:
         else:
             st.sidebar.error("Incorrect password")
 
-    # Do NOT stop the page; just show a note
     st.sidebar.info("Enter the access password to enable the app.")
     return False
+
 
 
 
@@ -872,11 +867,8 @@ Respond in a supervisor-style reflective tone, grounded in Gestalt field theory.
 def main():
  
     ensure_pg_schema()
+
     access_ok = require_app_password_sidebar()
-    if not access_ok:
-        st.stop()
-
-
 
     # ---- Stripe return handling: force refresh after checkout ----
     params = st.query_params
