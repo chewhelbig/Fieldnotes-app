@@ -1103,8 +1103,8 @@ def main():
         else:
             st.write("New accounts start with **7 free credits**.")
 
-        st.stop()
-
+        # Soft return: show UI but block generation
+        can_generate = False
 
     
     # (Optional) invite-only gate (keeps your beta list behavior)
