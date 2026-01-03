@@ -1004,19 +1004,22 @@ def main():
     
     # 3) Subscribe / Add credits (only after email)
     st.sidebar.markdown("### 💳 Subscribe / Credits")
-
+    
     # -------------------------
     # Access gate (soft gate)
     # -------------------------
-    
     is_subscribed = subscription_status in ("active", "trialing")
     
+    # ✅ Let existing trial users with remaining credits generate without needing the password
     if not email_ok:
         access_ok = False
     elif admin or is_subscribed:
         access_ok = True
+    elif credits_remaining > 0:
+        access_ok = True
     else:
         access_ok = require_app_password_sidebar()
+
 
     
     if not email_ok:
