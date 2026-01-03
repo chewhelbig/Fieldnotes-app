@@ -1089,7 +1089,7 @@ def main():
         st.subheader("Welcome")
         st.write("Enter your email in the sidebar to sign in or create an account.")
         if TRIAL_INVITE_CODE:
-            st.write("Free trial is **invite-only**. [Request free 7 credits](https://psychotherapist.sg/fieldnotes). You can still subscribe to use immediately.")
+            st.write("Free trial is **invite-only**. [Request free 7 credits](https://psychotherapist.sg/fieldnotes-contact-form). You can still subscribe to use immediately.")
         else:
             st.write("New accounts start with **7 free credits**.")
 
@@ -1116,7 +1116,7 @@ def main():
             if pg_user is None:
                 st.warning(
                     "No free trial active. "
-                    "[Request free 7 credits](https://psychotherapist.sg/fieldnotes) "
+                    "[Request free 7 credits](https://psychotherapist.sg/fieldnotes-contact-form) "
                     "or subscribe to use."
                 )
                 st.stop()
