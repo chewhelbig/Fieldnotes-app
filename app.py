@@ -907,7 +907,36 @@ def main():
     created = False
     credits_remaining = 0
     subscription_status = ""
+   
+    # --- NEW: define admin / existing_user / trial_allowed BEFORE using them ---
+    admin = is_admin(user_email) if email_ok else False
     
+    existing_user = pg_get_user(user_email) if email_ok else None
+    
+    # Invite-only free trial logic:
+    # - If user already exists -> allow (so they can continue using remaining trial credits etc.)
+    # - If no TRIAL_INVITE_CODE configured -> open trial for new users
+    # - If TRIAL_INVITE_CODE configured -> new users only get trial if they enter the invite code
+    trial_allowed = False
+    
+    if email_ok:
+        if existing_user is not None:
+            trial_allowed = True
+        elif not TRIAL_INVITE_CODE:
+            trial_allowed = True
+        else:
+            st.sidebar.markdown("### 🧾 Free trial (invite-only)")
+            invite = st.sidebar.text_input(
+                "Invite code (required for free trial)",
+                type="password",
+                key="trial_invite_code",
+            ).strip()
+    
+            if invite == TRIAL_INVITE_CODE:
+                trial_allowed = True
+            else:
+                st.sidebar.info("No invite code? You can still subscribe below (paid plan).")
+
     if email_ok:
         # Create user ONLY if trial is allowed (or user already exists)
         if existing_user is not None:
