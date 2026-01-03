@@ -1220,10 +1220,11 @@ def main():
         st.session_state["notes_text"] = notes_text
         st.session_state["gen_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M")
     
+    
         # 2) REFLECTION (optional)
         if generate_reflection:
             cost = REFLECTION_COST.get(reflection_intensity, 1)
-    
+        
             # REFLECTION — call OpenAI first; deduct ONLY after success
             try:
                 with st.spinner("Generating therapist reflection / supervision view..."):
@@ -1237,16 +1238,19 @@ def main():
                 st.error("Reflection generation failed. No credits were used.")
                 st.exception(e)
                 st.stop()
-            
-            # Deduct ONLY after success
+        
+            # Deduct ONLY after success (skip for admin)
             if not admin:
-                    if not pg_try_deduct_credits(user_email, cost):
-                        st.warning("Not enough credits to save this reflection.")
-                        st.stop()
-            
-                st.session_state["reflection_text"] = reflection
-            else:
-                st.session_state["reflection_text"] = ""
+                if not pg_try_deduct_credits(user_email, cost):
+                    st.warning("Not enough credits to save this reflection.")
+                    st.stop()
+        
+            # Save reflection for BOTH admin and normal users
+            st.session_state["reflection_text"] = reflection
+        
+        else:
+            st.session_state["reflection_text"] = ""
+
             
             
             st.rerun()
