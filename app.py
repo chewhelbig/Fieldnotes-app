@@ -296,9 +296,13 @@ def require_app_password_sidebar() -> bool:
     if not pwd:
         return True  # no password set → open
 
-    if st.session_state.get("access_ok"):
-        st.sidebar.caption("Access: enabled")
-        return True
+    access_ok = require_app_password_sidebar()
+    
+    if not access_ok:
+        st.title("FieldNotes - Session Companion")
+        st.info("Enter the access password in the sidebar to enable generation.")
+        # do NOT stop — let the rest of the UI render
+
 
 
     st.sidebar.markdown("### 🔒 Access")
@@ -1181,8 +1185,14 @@ def main():
     )
 
     is_subscribed = subscription_status in ("active", "trialing")
-    can_generate = admin or (credits_remaining > 0) or (subscription_status in ("active", "trialing"))
 
+
+    can_generate = access_ok and (
+        admin or (credits_remaining > 0) or (subscription_status in ("active", "trialing"))
+    )
+    
+    if not access_ok:
+        st.warning("Access is locked. Enter the access password in the sidebar to generate outputs.")
 
 
     # ===== Generate button (main area) =====
