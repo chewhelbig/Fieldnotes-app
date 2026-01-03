@@ -395,7 +395,7 @@ BILLING_API_URL = os.getenv(
 
 COST_GENERATE_NOTES = 1
 REFLECTION_COST = {
-    "Basic": 1,
+    "Basic": 2,
     "Deep": 2,
     "Very deep": 2,
 }
@@ -868,7 +868,6 @@ def main():
  
     ensure_pg_schema()
 
-    access_ok = require_app_password_sidebar()
 
     # ---- Stripe return handling: force refresh after checkout ----
     params = st.query_params
@@ -903,69 +902,38 @@ def main():
     
     email_ok = bool(user_email)
     
+    # --- Defaults (prevent crashes) ---
     pg_user = None
+    created = False
     credits_remaining = 0
     subscription_status = ""
-    created = False
-    admin = is_admin(user_email) if email_ok else False
-
-
-    if email_ok:
-        if st.session_state.get("user_email") != user_email:
-            st.session_state.pop("checkout_url", None)
-        st.session_state["user_email"] = user_email
-
     
-        # --- NEW: gate free trial only, allow subscription without invite ---
-        existing_user = pg_get_user(user_email)
-        
-        # If TRIAL_INVITE_CODE is set, NEW users do NOT get trial unless they enter it correctly.
-        trial_allowed = False
-        
-        if existing_user is not None:
-            trial_allowed = True  # existing users keep access to their existing credits/state
-        elif not TRIAL_INVITE_CODE:
-            trial_allowed = True  # open trial mode (no invite configured)
-        else:
-            st.sidebar.markdown("### 🧾 Free trial (invite-only)")
-            invite = st.sidebar.text_input("Invite code (required for free trial)", type="password").strip()
-        
-            if invite == TRIAL_INVITE_CODE:
-                trial_allowed = True
-            else:
-                st.sidebar.info("No invite? You can still subscribe below (paid plan).")
-
-        
+    if email_ok:
         # Create user ONLY if trial is allowed (or user already exists)
         if existing_user is not None:
             pg_user = existing_user
             created = False
         elif trial_allowed:
             pg_user, created = pg_get_or_create_user(user_email, grant_trial=True)
-         
         else:
             pg_user = None
             created = False
-
-
+    
         if pg_user:
             pg_maybe_reset_monthly(user_email)
             pg_user = pg_refresh_user(user_email)
-
-
-        if created:
-            st.sidebar.success("Account created — 7 free credits added 🎁")
-        
-        if pg_user:
+    
             credits_remaining = int(pg_user[2] or 0)
             subscription_status = (pg_user[5] or "").lower()
-
+    
+        if created:
+            st.sidebar.success("Account created — 7 free credits added 🎁")
     
         label = "Credits remaining"
         if subscription_status not in ("active", "trialing"):
             label = "Trial credits remaining"
         st.sidebar.caption(f"{label}: {credits_remaining}")
-        # Labels for trial vs paid
+    
         if subscription_status in ("active", "trialing"):
             st.sidebar.caption("Plan: Paid (subscription)")
         else:
@@ -973,27 +941,33 @@ def main():
                 st.sidebar.caption("Plan: Free trial (no card required)")
             else:
                 st.sidebar.caption("Plan: Not active (subscribe to use)")
-
-        # Manual refresh (only show when not yet active)
+    
         if subscription_status not in ("active", "trialing"):
             if st.sidebar.button("🔄 Refresh credits/subscription"):
                 st.rerun()
             st.sidebar.caption("Use this after payment if credits don’t update immediately.")
-
     else:
-        st.sidebar.info("Enter your email to continue.")
-    
-    if email_ok and subscription_status not in ("active", "trialing") and credits_remaining == 2:
-        st.sidebar.info("Most clinicians upgrade once this becomes part of their workflow.")
+        st.sidebar.info("Enter your email to activate credits and generation.")
 
-    
     st.sidebar.markdown("---")
     
     
     # 3) Subscribe / Add credits (only after email)
     st.sidebar.markdown("### 💳 Subscribe / Credits")
+
+    # -------------------------
+    # Access gate (soft gate)
+    # -------------------------
     
     is_subscribed = subscription_status in ("active", "trialing")
+    
+    if not email_ok:
+        access_ok = False
+    elif admin or is_subscribed:
+        access_ok = True
+    else:
+        access_ok = require_app_password_sidebar()
+
     
     if not email_ok:
         st.sidebar.caption("Enter email first to subscribe.")
@@ -1067,13 +1041,12 @@ def main():
         st.sidebar.markdown(
             "- **1 credit = 1 clinical notes generation** (one click on “Generate structured output”).\n"
             "- Clinical notes always cost **1 credit**.\n"
-            "- Adding *Therapist Reflection / Supervision View* uses **additional credits**:\n"
-            "  - Basic reflection: +1 credit\n"
-            "  - Deep / Very deep reflection: +2 credits\n"
+            "- Adding *Therapist Reflection / Supervision View* uses **2 credits** (flat rate):\n"
             "- Example: clinical notes + deep reflection = **3 credits total**.\n"
             "- Regenerating always counts as a new AI generation.\n"
             "- Credits measure AI usage, not therapy sessions."
         )
+
 
     
     st.sidebar.markdown("---")
@@ -1173,88 +1146,83 @@ def main():
 
 
     # ===== Generate button (main area) =====
-    if st.button("Generate structured output", disabled=not can_generate):  
+    if st.button("Generate structured output", disabled=not can_generate):
+    
+        # Default: do not generate unless all checks pass
+        generate_now = False
     
         if not email_ok:
             st.warning("Please enter your email in the sidebar to continue.")
-            st.stop()
-       
-        
-        # If not subscribed, credits must be > 0 (free trial)
-        if (not admin) and credits_remaining <= 0 and subscription_status not in ("active", "trialing"):
+        elif not access_ok:
+            st.warning("Trial access is locked. Enter the access password in the sidebar, or subscribe.")
+        elif (subscription_status not in ("active", "trialing")) and credits_remaining <= 0:
             st.warning("Free trial ended. Please subscribe (USD 29/month) or add credits to continue.")
-            st.stop()
-
-
-    
-        if not narrative.strip():
+        elif not narrative.strip():
             st.warning("Please enter a session narrative first.")
-            st.stop()
-
-        
-            
-        # (optional) require subscription / credits here
+        else:
+            generate_now = True
     
-        combined_narrative = narrative
+        if generate_now:
+            combined_narrative = narrative
     
-        # 1) NOTES — call OpenAI first; deduct ONLY after success
-        try:
-            with st.spinner("Generating clinical notes..."):
-                notes_text = call_openai(
-                    combined_narrative,
-                    client_name,
-                    output_mode
-                )
-        except Exception as e:
-            st.error("OpenAI request failed. No credits were used.")
-            st.exception(e)
-            st.stop()
-        
-        # Deduct ONLY after success
-        if not admin:
-            if not pg_try_deduct_credits(user_email, COST_GENERATE_NOTES):
-                st.warning("Not enough credits to save this generation. Please top up and try again.")
-                st.stop()
-
-        
-        st.session_state["notes_text"] = notes_text
-        st.session_state["gen_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    
-    
-        # 2) REFLECTION (optional)
-        if generate_reflection:
-            cost = REFLECTION_COST.get(reflection_intensity, 1)
-        
-            # REFLECTION — call OpenAI first; deduct ONLY after success
+            # 1) NOTES — call OpenAI first; deduct ONLY after success
             try:
-                with st.spinner("Generating therapist reflection / supervision view..."):
-                    reflection = call_reflection_engine(
-                        narrative=combined_narrative,
-                        ai_output=notes_text,
-                        client_name=client_name,
-                        intensity=reflection_intensity,
+                with st.spinner("Generating clinical notes..."):
+                    notes_text = call_openai(
+                        combined_narrative,
+                        client_name,
+                        output_mode
                     )
             except Exception as e:
-                st.error("Reflection generation failed. No credits were used.")
+                st.error("OpenAI request failed. No credits were used.")
                 st.exception(e)
-                st.stop()
-        
-            # Deduct ONLY after success (skip for admin)
-            if not admin:
-                if not pg_try_deduct_credits(user_email, cost):
-                    st.warning("Not enough credits to save this reflection.")
-                    st.stop()
-        
-            # Save reflection for BOTH admin and normal users
-            st.session_state["reflection_text"] = reflection
-        
-        else:
-            st.session_state["reflection_text"] = ""
+                notes_text = ""
+                # no st.stop()
+    
+            if notes_text:
+                # Deduct ONLY after success
+                if not admin:
+                    if not pg_try_deduct_credits(user_email, COST_GENERATE_NOTES):
+                        st.warning("Not enough credits to save this generation. Please top up and try again.")
+                        # no st.stop()
+                    else:
+                        st.session_state["notes_text"] = notes_text
+                        st.session_state["gen_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M")
+                else:
+                    st.session_state["notes_text"] = notes_text
+                    st.session_state["gen_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    
+                # 2) REFLECTION (optional)
+                if generate_reflection:
+                    cost = REFLECTION_COST.get(reflection_intensity, 2)
+    
+                    try:
+                        with st.spinner("Generating therapist reflection / supervision view..."):
+                            reflection = call_reflection_engine(
+                                narrative=combined_narrative,
+                                ai_output=notes_text,
+                                client_name=client_name,
+                                intensity=reflection_intensity,
+                            )
+                    except Exception as e:
+                        st.error("Reflection generation failed. No credits were used.")
+                        st.exception(e)
+                        reflection = ""
+    
+                    if reflection:
+                        if not admin:
+                            if not pg_try_deduct_credits(user_email, cost):
+                                st.warning("Not enough credits to save this reflection.")
+                                # no st.stop()
+                            else:
+                                st.session_state["reflection_text"] = reflection
+                        else:
+                            st.session_state["reflection_text"] = reflection
+                    else:
+                        st.session_state["reflection_text"] = ""
+                else:
+                    st.session_state["reflection_text"] = ""
 
-            
-            
-            st.rerun()
-   
 
     # ALWAYS read from session_state (survives reruns + downloads)
     notes_text = st.session_state.get("notes_text", "")
