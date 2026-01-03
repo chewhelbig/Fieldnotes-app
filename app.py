@@ -89,7 +89,7 @@ def pg_get_or_create_user(email: str, grant_trial: bool = False):
         # 2) Not found -> insert with safe default credits
         starting_credits = TRIAL_CREDITS if grant_trial else 0
         plan = "free"  # keep 'free' unless you explicitly set 'pro' elsewhere
-
+        
         cur.execute(
             """
             INSERT INTO users (
@@ -97,10 +97,30 @@ def pg_get_or_create_user(email: str, grant_trial: bool = False):
             )
             VALUES (%s, %s, %s, 0, CURRENT_DATE, 'free')
             ON CONFLICT (email) DO NOTHING
+            RETURNING email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status
             """,
             (email, plan, starting_credits),
         )
+        inserted = cur.fetchone()
         conn.commit()
+        
+        if inserted:
+            cur.close()
+            return inserted, True  # ✅ truly created
+        
+        # If we didn't insert (conflict), fetch and return created=False
+        cur.execute(
+            """
+            SELECT email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status
+            FROM users
+            WHERE email = %s
+            """,
+            (email,),
+        )
+        row = cur.fetchone()
+        cur.close()
+        return row, False
+
 
         # 3) Fetch again
         cur.execute(
@@ -944,6 +964,7 @@ def main():
             created = False
         elif trial_allowed:
             pg_user, created = pg_get_or_create_user(user_email, grant_trial=True)
+
         else:
             pg_user = None
             created = False
@@ -1046,21 +1067,28 @@ def main():
     
     # 4) Settings (only useful once subscribed + access ok)
     st.sidebar.header("Settings")
-    output_mode = st.sidebar.radio("Output detail level", ["Short", "Full"], index=1)
     
-    generate_reflection = st.sidebar.checkbox(
-        "Generate therapist reflection / supervision view",
-        value=False,
-    )
+    if access_ok:
+        output_mode = st.sidebar.radio("Output detail level", ["Short", "Full"], index=1)
     
-    if generate_reflection:
-        reflection_intensity = st.sidebar.selectbox(
-            "Reflection intensity",
-            options=["Basic", "Deep", "Very deep"],
-            index=1,
+        generate_reflection = st.sidebar.checkbox(
+            "Generate therapist reflection / supervision view",
+            value=False,
         )
+    
+        if generate_reflection:
+            reflection_intensity = st.sidebar.selectbox(
+                "Reflection intensity",
+                options=["Basic", "Deep", "Very deep"],
+                index=1,
+            )
+        else:
+            reflection_intensity = "Deep"
     else:
+        output_mode = "Full"
+        generate_reflection = False
         reflection_intensity = "Deep"
+
     
     st.sidebar.markdown("---")
     
