@@ -1279,7 +1279,14 @@ def main():
 
     
     if not access_ok:
-        st.warning("Access is locked. Enter the access password in the sidebar to generate outputs.")
+        st.warning(
+            "Access is locked. "
+            "Enter the trial access password in the sidebar or subscribe to continue."
+        )
+    elif not subscriber_pin_ok:
+        st.warning("Please enter your subscriber PIN in the sidebar to generate outputs.")
+    elif credits_remaining <= 0 and subscription_status not in ("active", "trialing") and not admin:
+        st.warning("No credits remaining. Please subscribe to continue.")
 
 
     # ===== Generate button (main area) =====
