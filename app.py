@@ -41,10 +41,16 @@ def ensure_pg_schema():
               created_at TIMESTAMPTZ DEFAULT NOW()
             );
         """)
+
+        # ✅ Add subscriber PIN column (safe to run repeatedly)
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS app_pin TEXT;")
+
         conn.commit()
         cur.close()
     finally:
         conn.close()
+
+
 
 TRIAL_INVITE_CODE = os.environ.get("TRIAL_INVITE_CODE", "").strip()
 
@@ -227,6 +233,37 @@ def pg_refresh_user(email: str):
      subscription_status, stripe_customer_id, stripe_subscription_id)
     """
     return pg_get_user(email)
+
+def pg_get_app_pin(email: str) -> str | None:
+    email = (email or "").strip().lower()
+    if not email:
+        return None
+    conn = get_pg_conn()
+    if conn is None:
+        return None
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT app_pin FROM users WHERE email=%s", (email,))
+        row = cur.fetchone()
+        cur.close()
+        return (row[0] if row else None)
+    finally:
+        conn.close()
+
+def pg_set_app_pin(email: str, pin: str) -> None:
+    email = (email or "").strip().lower()
+    if not email:
+        return
+    conn = get_pg_conn()
+    if conn is None:
+        return
+    try:
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET app_pin=%s WHERE email=%s", (pin, email))
+        conn.commit()
+        cur.close()
+    finally:
+        conn.close()
 
 
 # ===== credit ============
@@ -1005,20 +1042,27 @@ def main():
     # 3) Subscribe / Add credits (only after email)
     st.sidebar.markdown("### 💳 Subscribe / Credits")
     
+   
     # -------------------------
     # Access gate (soft gate)
     # -------------------------
     is_subscribed = subscription_status in ("active", "trialing")
     
-    # ✅ Let existing trial users with remaining credits generate without needing the password
     if not email_ok:
         access_ok = False
+    
+    # Admins and subscribers always allowed
     elif admin or is_subscribed:
         access_ok = True
+    
+    # ✅ Trial users who already HAVE credits may generate
     elif credits_remaining > 0:
         access_ok = True
+    
+    # Everyone else must enter the access password
     else:
         access_ok = require_app_password_sidebar()
+
 
 
     
@@ -1051,6 +1095,38 @@ def main():
             st.sidebar.success("Subscription: active")
             st.session_state.pop("checkout_url", None)
 
+
+
+
+            # -------------------------
+            # Subscriber PIN gate (optional)
+            # -------------------------
+            subscriber_pin_ok = True
+            
+            if is_subscribed and email_ok and not admin:
+                st.sidebar.markdown("### 🔐 Subscriber PIN (optional)")
+            
+                current_pin = pg_get_app_pin(user_email)
+            
+                if not current_pin:
+                    new_pin = st.sidebar.text_input("Set a PIN (4–8 digits)", type="password", key="set_pin")
+                    if st.sidebar.button("Save PIN", key="save_pin"):
+                        if new_pin.isdigit() and 4 <= len(new_pin) <= 8:
+                            pg_set_app_pin(user_email, new_pin)
+                            st.sidebar.success("PIN saved.")
+                            st.rerun()
+                        else:
+                            st.sidebar.error("PIN must be 4–8 digits.")
+                else:
+                    entered_pin = st.sidebar.text_input("Enter PIN to generate", type="password", key="enter_pin")
+                    subscriber_pin_ok = bool(entered_pin) and (entered_pin == current_pin)
+                    if not subscriber_pin_ok:
+                        st.sidebar.caption("Enter your PIN to enable generation.")
+        
+
+    
+
+            
     
             # Optional: Add credits button (depends on your billing backend)
             # If you already built a credits checkout endpoint, set it here:
@@ -1197,9 +1273,10 @@ def main():
     is_subscribed = subscription_status in ("active", "trialing")
 
 
-    can_generate = access_ok and (
+    can_generate = access_ok and subscriber_pin_ok and (
         admin or (credits_remaining > 0) or (subscription_status in ("active", "trialing"))
     )
+
     
     if not access_ok:
         st.warning("Access is locked. Enter the access password in the sidebar to generate outputs.")
