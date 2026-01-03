@@ -868,6 +868,11 @@ Respond in a supervisor-style reflective tone, grounded in Gestalt field theory.
 def main():
  
     ensure_pg_schema()
+    access_ok = require_app_password_sidebar()
+    if not access_ok:
+        st.stop()
+
+
 
     # ---- Stripe return handling: force refresh after checkout ----
     params = st.query_params
@@ -906,7 +911,9 @@ def main():
     credits_remaining = 0
     subscription_status = ""
     created = False
-    
+    admin = is_admin(user_email) if email_ok else False
+
+
     if email_ok:
         if st.session_state.get("user_email") != user_email:
             st.session_state.pop("checkout_url", None)
@@ -1110,26 +1117,27 @@ def main():
     
     # --- Trial / billing status (informational only; do NOT stop the app UI) ---
     is_subscribed = subscription_status in ("active", "trialing")
-    
-    if not is_subscribed:
-        if credits_remaining <= 0:
-            if pg_user is None:
-                st.warning(
-                    "No free trial active. "
-                    "[Request free 7 credits](https://psychotherapist.sg/fieldnotes-contact-form) "
-                    "or subscribe to use."
-                )
-                st.stop()
+
+    if not admin:
+        if not is_subscribed:
+            if credits_remaining <= 0:
+                if pg_user is None:
+                    st.warning(
+                        "No free trial active. "
+                        "[Request free 7 credits](https://psychotherapist.sg/fieldnotes-contact-form) "
+                        "or subscribe to use."
+                    )
+                    st.stop()
+                else:
+                    st.warning(
+                        "Free trial ended: you’ve used all 7 credits. "
+                        "Please subscribe to continue."
+                    )
+                    st.stop()
             else:
-                st.warning(
-                    "Free trial ended: you’ve used all 7 credits. "
-                    "Please subscribe to continue."
-                )
-                st.stop()
+                st.info(f"Free trial: {credits_remaining} credits remaining.")
         else:
-            st.info(f"Free trial: {credits_remaining} credits remaining.")
-    else:
-        st.success("Subscription active.")
+            st.success("Subscription active.")
 
 
 
@@ -1168,7 +1176,8 @@ def main():
     )
 
     is_subscribed = subscription_status in ("active", "trialing")
-    can_generate = credits_remaining > 0
+    can_generate = admin or (credits_remaining > 0) or (subscription_status in ("active", "trialing"))
+
 
 
     # ===== Generate button (main area) =====
@@ -1180,9 +1189,10 @@ def main():
        
         
         # If not subscribed, credits must be > 0 (free trial)
-        if credits_remaining <= 0 and subscription_status not in ("active", "trialing"):
+        if (not admin) and credits_remaining <= 0 and subscription_status not in ("active", "trialing"):
             st.warning("Free trial ended. Please subscribe (USD 29/month) or add credits to continue.")
             st.stop()
+
 
     
         if not narrative.strip():
@@ -1209,9 +1219,10 @@ def main():
             st.stop()
         
         # Deduct ONLY after success
-        if not pg_try_deduct_credits(user_email, COST_GENERATE_NOTES):
-            st.warning("Not enough credits to save this generation. Please top up and try again.")
-            st.stop()
+        if not admin:
+            if not pg_try_deduct_credits(user_email, COST_GENERATE_NOTES):
+                st.warning("Not enough credits to save this generation. Please top up and try again.")
+                st.stop()
 
         
         st.session_state["notes_text"] = notes_text
@@ -1236,16 +1247,17 @@ def main():
                 st.stop()
             
             # Deduct ONLY after success
-            if not pg_try_deduct_credits(user_email, cost):
-                st.warning("Not enough credits to save this reflection. Please top up and try again.")
-                st.stop()
-    
-            st.session_state["reflection_text"] = reflection
-        else:
-            st.session_state["reflection_text"] = ""
+            if not admin:
+                if not pg_try_deduct_credits(user_email, cost):
+                    st.warning("Not enough credits to save this reflection. Please top up and try again.")
+                    st.stop()
         
-        
-        st.rerun()
+                st.session_state["reflection_text"] = reflection
+            else:
+                st.session_state["reflection_text"] = ""
+            
+            
+            st.rerun()
    
 
     # ALWAYS read from session_state (survives reruns + downloads)
