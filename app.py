@@ -1067,13 +1067,18 @@ def main():
     
     # Usage + hosted mode info can stay
     st.sidebar.subheader("Usage")
-    with st.sidebar.expander("What is 1 generation?"):
+    with st.sidebar.expander("How credits are used"):
         st.sidebar.markdown(
-            "- **1 generation = 1 click on “Generate structured output”.**\n"
-            "- Includes clinical notes and reflection (if enabled).\n"
-            "- Regenerating counts as a new generation.\n"
-            "- A generation is an AI output, not a therapy session."
+            "- **1 credit = 1 clinical notes generation** (one click on “Generate structured output”).\n"
+            "- Clinical notes always cost **1 credit**.\n"
+            "- Adding *Therapist Reflection / Supervision View* uses **additional credits**:\n"
+            "  - Basic reflection: +1 credit\n"
+            "  - Deep / Very deep reflection: +2 credits\n"
+            "- Example: clinical notes + deep reflection = **3 credits total**.\n"
+            "- Regenerating always counts as a new AI generation.\n"
+            "- Credits measure AI usage, not therapy sessions."
         )
+
     
     st.sidebar.markdown("---")
     st.sidebar.subheader("Hosted mode: download-only")
