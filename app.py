@@ -1111,24 +1111,16 @@ def main():
     st.subheader("Account")
     st.write(f"Signed in as: **{user_email}**")
 
-
-    
-    # --- Trial / billing status (informational only; do NOT stop the app UI) ---
-    is_subscribed = subscription_status in ("active", "trialing")
     
     # --- Trial / billing status (informational only; do NOT stop the app UI) ---
     is_subscribed = subscription_status in ("active", "trialing")
 
     if not admin:
-        if not is_subscribed:
-            if credits_remaining <= 0:
-                if pg_user is None:
-                    st.warning(
-                        "No free trial active. "
-                        "[Request free 7 credits](https://psychotherapist.sg/fieldnotes-contact-form) "
-                        "or subscribe to use."
-                    )
-                    st.stop()
+        if not is_subscribed and credits_remaining <= 0:
+            st.warning(
+                "Free trial ended. Please subscribe to continue."
+            )
+
                 else:
                     st.warning(
                         "Free trial ended: you’ve used all 7 credits. "
@@ -1255,10 +1247,10 @@ def main():
             
             # Deduct ONLY after success
             if not admin:
-                if not pg_try_deduct_credits(user_email, cost):
-                    st.warning("Not enough credits to save this reflection. Please top up and try again.")
-                    st.stop()
-        
+                    if not pg_try_deduct_credits(user_email, cost):
+                        st.warning("Not enough credits to save this reflection.")
+                        st.stop()
+            
                 st.session_state["reflection_text"] = reflection
             else:
                 st.session_state["reflection_text"] = ""
