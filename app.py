@@ -1114,23 +1114,16 @@ def main():
     
     # --- Trial / billing status (informational only; do NOT stop the app UI) ---
     is_subscribed = subscription_status in ("active", "trialing")
-
-    if not admin:
-        if not is_subscribed and credits_remaining <= 0:
-            st.warning(
-                "Free trial ended. Please subscribe to continue."
-            )
-
-                else:
-                    st.warning(
-                        "Free trial ended: you’ve used all 7 credits. "
-                        "Please subscribe to continue."
-                    )
-                    st.stop()
-            else:
-                st.info(f"Free trial: {credits_remaining} credits remaining.")
-        else:
-            st.success("Subscription active.")
+    
+    if admin:
+        st.info("Admin access: generation enabled.")
+    elif is_subscribed:
+        st.success("Subscription active.")
+    elif credits_remaining > 0:
+        st.info(f"Free trial: {credits_remaining} credits remaining.")
+    else:
+        st.warning("Free trial ended. Please subscribe to continue.")
+    
 
 
 
