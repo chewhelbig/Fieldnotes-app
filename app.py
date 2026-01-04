@@ -1211,7 +1211,7 @@ def main():
                 trial_allowed = True
             else:
                 st.sidebar.info("No invite code? You can still subscribe below (paid plan).")
-
+    # ---------------- User creation / refresh ----------------
     if email_ok:
         # Create user ONLY if trial is allowed (or user already exists)
         if existing_user is not None:
@@ -1230,21 +1230,19 @@ def main():
     
             credits_remaining = int(pg_user[2] or 0)
             subscription_status = (pg_user[5] or "").lower()
-    
+    # ---------------- Account created message ----------------
     if created:
-    st.sidebar.markdown(
-        """
-        <div style="padding: 0.75rem; background-color: #e6f4ea; border-radius: 0.5rem;">
-            <strong>Account created</strong> — 
-            <a href="#verify-email" style="text-decoration: underline;">
-                verify email to activate 7 free credits 🎁
-            </a>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
+        st.sidebar.markdown(
+            """
+            <div style="padding: 0.75rem; background-color: #e6f4ea; border-radius: 0.5rem;">
+                <strong>Account created</strong> — 
+                <a href="#verify-email" style="text-decoration: underline;">
+                    verify email to activate 7 free credits 🎁
+                </a>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 
         # Hide the long sidebar caption for subscribed users and trial users
