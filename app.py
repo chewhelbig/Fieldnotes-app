@@ -1292,7 +1292,19 @@ def main():
     is_trial_user = (pg_user is not None) and (credits_remaining > 0)
     is_brand_new = (pg_user is not None) and (credits_remaining == 0) and (not is_subscribed)
     
-    if email_ok and pg_user and (not email_verified) and is_brand_new:
+    is_subscribed = (subscription_status or "").lower() in ("active", "trialing")
+    
+    # show verify only if they still need it
+    show_verify_email = (
+        email_ok
+        and (pg_user is not None)
+        and (not is_subscribed)
+        and (not email_verified)
+        and (credits_remaining <= 0)
+    )
+    
+    if show_verify_email:
+
         st.sidebar.markdown("### ✅ Verify email (required for free trial)")
     
         if st.sidebar.button("Send verification code", key="send_verify_code"):
