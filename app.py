@@ -554,6 +554,58 @@ FieldNotes
     sg = SendGridAPIClient(api_key)
     sg.send(message)
 
+#===========send onboarding email=========
+def send_onboarding_email(to_email: str, subject: str, text: str, html: str | None = None):
+    """
+    Lightweight SendGrid sender for onboarding emails.
+    Uses SENDGRID_API_KEY + SENDGRID_FROM_EMAIL env vars.
+    """
+    api_key = os.environ.get("SENDGRID_API_KEY", "").strip()
+    from_email = os.environ.get("SENDGRID_FROM_EMAIL", "nicole@psychotherapist.sg").strip()
+
+    if not api_key:
+        raise RuntimeError("SENDGRID_API_KEY missing")
+    if not from_email:
+        raise RuntimeError("SENDGRID_FROM_EMAIL missing")
+
+    message = Mail(
+        from_email=from_email,
+        to_emails=to_email,
+        subject=subject,
+        plain_text_content=text,
+        html_content=html or None,
+    )
+    sg = SendGridAPIClient(api_key)
+    sg.send(message)
+#========trial welcome trial verified users=========
+
+def email_trial_verified_body():
+    landing = "https://psychotherapist.sg/fieldnotes"
+    app_url = "https://fieldnotes.psychotherapist.sg"
+
+    subject = "Welcome to FieldNotes — your 7 free credits are active 🎁"
+    text = f"""Dear Colleague,
+
+Welcome to FieldNotes.
+
+This isn’t just a session-writing tool — it’s a professional companion for clearer thinking, better continuity, and better supervision conversations.
+
+Your 7 free trial credits are now active.
+
+Start here (quick guide + concepts like SOAP & Contact Cycle):
+{landing}
+
+Open the app:
+{app_url}
+
+Warmly,
+Nicole Chew-Helbig
+"""
+    return subject, text
+
+
+
+
 
 # ============PASSWORD================
 def require_app_password_sidebar() -> bool:
@@ -1327,20 +1379,32 @@ def main():
             key="verify_code_input",
         )
     
-        if st.sidebar.button("Verify email", key="btn_verify_email"):
-            ok, msg = pg_check_verification_code(user_email, entered_code)
-            if ok:
-                pg_mark_email_verified(user_email)
+    if st.sidebar.button("Verify email", key="btn_verify_email"):
+        ok, msg = pg_check_verification_code(user_email, entered_code)
+        if ok:
+            pg_mark_email_verified(user_email)
     
-                granted = pg_grant_trial_credits_once(user_email, trial_credits=7)
-                if granted:
-                    st.sidebar.success("Email verified — 7 free credits added 🎁")
-                else:
-                    st.sidebar.success("Email verified.")
+            granted = pg_grant_trial_credits_once(user_email, trial_credits=7)
+            if granted:
+                st.sidebar.success("Email verified — 7 free credits added 🎁")
     
-                st.rerun()
+                # ✅ ADD THIS (send onboarding email after trial activation)
+                try:
+                    subject, text = email_trial_verified_body()
+                    send_onboarding_email(user_email, subject=subject, text=text)
+                except Exception as e:
+                    # Don't break the app if email fails
+                    st.sidebar.caption("Note: welcome email could not be sent.")
+                    # optional for debugging:
+                    # st.sidebar.exception(e)
+    
             else:
-                st.sidebar.warning(msg)
+                st.sidebar.success("Email verified.")
+    
+            st.rerun()
+        else:
+            st.sidebar.warning(msg)
+
 
     
     st.sidebar.markdown("---")
