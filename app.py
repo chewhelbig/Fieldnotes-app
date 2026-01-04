@@ -526,12 +526,22 @@ def send_verification_email(to_email: str, code: str):
     if not api_key or not from_email:
         raise RuntimeError("Missing SENDGRID_API_KEY or FROM_EMAIL env var.")
 
-    subject = "Your Fieldnotes verification code"
-    body = f"""Your verification code is: {code}
+    subject = "Your FieldNotes verification code"
 
-It expires in {OTP_TTL_MINUTES} minutes.
+    body = f"""Hello,
 
-If you didn’t request this, you can ignore this email.
+Your FieldNotes verification code is:
+
+{code}
+
+This code is valid for 15 minutes.
+
+Once verified, your free trial credits will be activated and you can start generating notes.
+
+If you didn’t request this, you can safely ignore this email.
+
+Warm regards,
+FieldNotes
 """
 
     message = Mail(
@@ -540,9 +550,9 @@ If you didn’t request this, you can ignore this email.
         subject=subject,
         plain_text_content=body,
     )
+
     sg = SendGridAPIClient(api_key)
     sg.send(message)
-
 
 
 # ============PASSWORD================
