@@ -14,6 +14,9 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
 
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
+
 # ====== database ===========
 def get_pg_conn():
     url = os.environ.get("DATABASE_URL")
@@ -149,6 +152,36 @@ def pg_get_or_create_user(email: str, grant_trial: bool = False):
         cur.close()
         return row, True
 
+    finally:
+        conn.close()
+
+def pg_grant_trial_credits_once(email: str, trial_credits: int = 7) -> bool:
+    """
+    Grants trial credits only if:
+    - email is verified
+    - user currently has 0 credits AND plan is 'free'
+    Returns True if granted, False otherwise.
+    """
+    conn = get_pg_conn()
+    if conn is None:
+        return False
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE users
+            SET credits_remaining=%s, plan='trial'
+            WHERE email=%s
+              AND email_verified_at IS NOT NULL
+              AND (credits_remaining IS NULL OR credits_remaining=0)
+              AND (plan IS NULL OR plan='free')
+            """,
+            (trial_credits, email),
+        )
+        updated = cur.rowcount
+        conn.commit()
+        cur.close()
+        return updated == 1
     finally:
         conn.close()
 
@@ -485,6 +518,30 @@ def pg_check_verification_code(email: str, code: str) -> tuple[bool, str]:
         return True, "Verified."
     finally:
         conn.close()
+# ========Send Verification email =======
+
+def send_verification_email(to_email: str, code: str):
+    api_key = os.environ.get("SENDGRID_API_KEY", "")
+    from_email = os.environ.get("FROM_EMAIL", "")
+    if not api_key or not from_email:
+        raise RuntimeError("Missing SENDGRID_API_KEY or FROM_EMAIL env var.")
+
+    subject = "Your Fieldnotes verification code"
+    body = f"""Your verification code is: {code}
+
+It expires in {OTP_TTL_MINUTES} minutes.
+
+If you didn’t request this, you can ignore this email.
+"""
+
+    message = Mail(
+        from_email=from_email,
+        to_emails=to_email,
+        subject=subject,
+        plain_text_content=body,
+    )
+    sg = SendGridAPIClient(api_key)
+    sg.send(message)
 
 
 
@@ -1141,7 +1198,7 @@ def main():
             pg_user = existing_user
             created = False
         elif trial_allowed:
-            pg_user, created = pg_get_or_create_user(user_email, grant_trial=True)
+            pg_user, created = pg_get_or_create_user(user_email, grant_trial=False)
 
         else:
             pg_user = None
@@ -1176,7 +1233,51 @@ def main():
             st.sidebar.caption("Use this after payment if credits don’t update immediately.")
     else:
         st.sidebar.info("Enter your email to activate credits and generation.")
+    
+    # -------------------------
+    # Email verification (required for free trial credits)
+    # -------------------------
+    email_verified = False
+    if email_ok and pg_user:
+        email_verified = pg_is_email_verified(user_email)
+    
+    if email_ok and pg_user and not email_verified:
+        st.sidebar.markdown("### ✅ Verify email (required for free trial)")
+    
+        if st.sidebar.button("Send verification code", key="send_verify_code"):
+            code = f"{secrets.randbelow(10**6):06d}"
+            expires_at = _utcnow() + timedelta(minutes=OTP_TTL_MINUTES)
+    
+            pg_set_verification_code(user_email, code, expires_at)
+    
+            try:
+                send_verification_email(user_email, code)
+                st.sidebar.success("Verification code sent. Check your email.")
+            except Exception as e:
+                st.sidebar.error("Could not send verification email.")
+                st.sidebar.exception(e)
+    
+        entered_code = st.sidebar.text_input(
+            "Enter 6-digit verification code",
+            key="verify_code_input",
+        )
+    
+        if st.sidebar.button("Verify email", key="btn_verify_email"):
+            ok, msg = pg_check_verification_code(user_email, entered_code)
+            if ok:
+                pg_mark_email_verified(user_email)
+    
+                granted = pg_grant_trial_credits_once(user_email, trial_credits=7)
+                if granted:
+                    st.sidebar.success("Email verified — 7 free credits added 🎁")
+                else:
+                    st.sidebar.success("Email verified.")
+    
+                st.rerun()
+            else:
+                st.sidebar.warning(msg)
 
+    
     st.sidebar.markdown("---")
     
     
