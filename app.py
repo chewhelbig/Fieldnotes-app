@@ -1189,9 +1189,9 @@ def main():
     existing_user = pg_get_user(user_email) if email_ok else None
     
     # Invite-only free trial logic:
-    # - If user already exists -> allow (so they can continue using remaining trial credits etc.)
-    # - If no TRIAL_INVITE_CODE configured -> open trial for new users
-    # - If TRIAL_INVITE_CODE configured -> new users only get trial if they enter the invite code
+    # - If user already exists -> allow
+    # - If no TRIAL_INVITE_CODE -> open trial
+    # - If TRIAL_INVITE_CODE -> require invite for new users
     trial_allowed = False
     
     if email_ok:
@@ -1211,15 +1211,14 @@ def main():
                 trial_allowed = True
             else:
                 st.sidebar.info("No invite code? You can still subscribe below (paid plan).")
+    
     # ---------------- User creation / refresh ----------------
     if email_ok:
-        # Create user ONLY if trial is allowed (or user already exists)
         if existing_user is not None:
             pg_user = existing_user
             created = False
         elif trial_allowed:
             pg_user, created = pg_get_or_create_user(user_email, grant_trial=False)
-
         else:
             pg_user = None
             created = False
@@ -1230,12 +1229,13 @@ def main():
     
             credits_remaining = int(pg_user[2] or 0)
             subscription_status = (pg_user[5] or "").lower()
+    
     # ---------------- Account created message ----------------
     if created:
         st.sidebar.markdown(
             """
             <div style="padding: 0.75rem; background-color: #e6f4ea; border-radius: 0.5rem;">
-                <strong>Account created</strong> — 
+                <strong>Account created</strong> —
                 <a href="#verify-email" style="text-decoration: underline;">
                     verify email to activate 7 free credits 🎁
                 </a>
@@ -1243,16 +1243,15 @@ def main():
             """,
             unsafe_allow_html=True,
         )
-
-
-        # Hide the long sidebar caption for subscribed users and trial users
+    
+    # ---------------- Sidebar caption visibility ----------------
+    if email_ok and pg_user:
         is_subscribed = subscription_status in ("active", "trialing")
-        is_trial_user = (pg_user is not None) and (credits_remaining > 0)
-        
+        is_trial_user = credits_remaining > 0
+    
         if is_subscribed or is_trial_user:
             sign_in_caption.empty()
         else:
-            # Keep guidance visible only for brand-new / inactive visitors
             if TRIAL_INVITE_CODE:
                 sign_in_caption.caption(
                     "Free trial is invite-only. You can still subscribe without an invite."
@@ -1261,13 +1260,13 @@ def main():
                 sign_in_caption.caption(
                     "New users get 7 free credits."
                 )
-
-
     
         label = "Credits remaining"
         if subscription_status not in ("active", "trialing"):
             label = "Trial credits remaining"
+    
         st.sidebar.caption(f"{label}: {credits_remaining}")
+
     
         if subscription_status in ("active", "trialing"):
             st.sidebar.caption("Plan: Paid (subscription)")
