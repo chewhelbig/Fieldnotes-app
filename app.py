@@ -1510,12 +1510,12 @@ def main():
     else:
         output_mode = "Full"
                         
-        # Reflection toggle (main UI)
-        generate_reflection = st.checkbox(
-            "Generate therapist reflection / supervision view",
-            value=False,
-            key="generate_reflection_main",
-        )
+    # Reflection toggle (main UI)
+    generate_reflection = st.checkbox(
+        "Generate therapist reflection / supervision view",
+        value=False,
+        key="generate_reflection_main",
+    )
         
     # Reflection intensity (only if reflection is enabled)
     if generate_reflection:
