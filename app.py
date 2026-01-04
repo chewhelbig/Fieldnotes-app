@@ -1156,7 +1156,7 @@ def main():
     sign_in_caption = st.sidebar.empty()
     
     # Show something helpful before we know user status (i.e., before email is entered)
-    if not st.session_state.get("user_email"):
+    if not user_email:
         if TRIAL_INVITE_CODE:
             sign_in_caption.caption(
                 "Enter your email to continue. Free trial is invite-only. You can still subscribe without an invite."
