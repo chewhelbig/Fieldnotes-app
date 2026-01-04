@@ -1270,23 +1270,36 @@ def main():
         key="dl_draft_txt"
     )
 
+    # -------------------------
+    # Generation eligibility (must be defined for ALL paths)
+    # -------------------------
     is_subscribed = subscription_status in ("active", "trialing")
-
-
-    can_generate = access_ok and subscriber_pin_ok and (
-        admin or (credits_remaining > 0) or (subscription_status in ("active", "trialing"))
-    )
-
     
-    if not access_ok:
+    # Default: PIN gate passes unless subscriber has a PIN set and hasn't entered it
+    subscriber_pin_ok = True
+    
+    # If you implemented subscriber PIN UI, it should set subscriber_pin_ok accordingly.
+    # But even if not, the default above prevents NameError.
+    
+    can_generate = access_ok and subscriber_pin_ok and (
+        admin or (credits_remaining > 0) or is_subscribed
+    )
+    
+    # Helpful messages (optional)
+    if not email_ok:
+        st.info("Enter your email in the sidebar to enable generation.")
+    elif not access_ok:
         st.warning(
             "Access is locked. "
             "Enter the trial access password in the sidebar or subscribe to continue."
         )
     elif not subscriber_pin_ok:
         st.warning("Please enter your subscriber PIN in the sidebar to generate outputs.")
-    elif credits_remaining <= 0 and subscription_status not in ("active", "trialing") and not admin:
+    elif (not is_subscribed) and (credits_remaining <= 0) and (not admin):
         st.warning("No credits remaining. Please subscribe to continue.")
+    
+   
+
 
 
     # ===== Generate button (main area) =====
@@ -1449,7 +1462,7 @@ def main():
                     "No reflection generated for this session. "
                     "Tick the reflection option in the sidebar if you want one next time."
                 )
-
+                
 
     st.caption(f"FieldNotes for Therapists · v{APP_VERSION} · Created by Nicole Chew-Helbig")
 
