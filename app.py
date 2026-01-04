@@ -1152,6 +1152,16 @@ def main():
     
     # 1) Sign in (email)
     st.sidebar.markdown("### 👤 Sign in / Sign up")
+    
+    # Email input FIRST (so user_email exists)
+    user_email = st.sidebar.text_input(
+        "Email",
+        value=st.session_state.get("user_email", ""),
+        placeholder="you@clinic.com",
+    ).strip().lower()
+    
+    email_ok = bool(user_email)
+    
     # Sidebar helper text (only for brand-new / inactive visitors)
     sign_in_caption = st.sidebar.empty()
     
@@ -1278,7 +1288,11 @@ def main():
     if email_ok and pg_user:
         email_verified = pg_is_email_verified(user_email)
     
-    if email_ok and pg_user and not email_verified:
+    is_subscribed = subscription_status in ("active", "trialing")
+    is_trial_user = (pg_user is not None) and (credits_remaining > 0)
+    is_brand_new = (pg_user is not None) and (credits_remaining == 0) and (not is_subscribed)
+    
+    if email_ok and pg_user and (not email_verified) and is_brand_new:
         st.sidebar.markdown("### ✅ Verify email (required for free trial)")
     
         if st.sidebar.button("Send verification code", key="send_verify_code"):
