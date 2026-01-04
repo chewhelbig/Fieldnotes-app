@@ -1152,11 +1152,19 @@ def main():
     
     # 1) Sign in (email)
     st.sidebar.markdown("### 👤 Sign in / Sign up")
-    # Caption changes depending on trial eligibility
-    if TRIAL_INVITE_CODE:
-        st.sidebar.caption("Enter your email to continue. Free trial is invite-only. You can still subscribe without an invite.")
-    else:
-        st.sidebar.caption("Enter your email to create an account or continue. New users get 7 free credits.")
+    # Sidebar helper text (only for brand-new / inactive visitors)
+    sign_in_caption = st.sidebar.empty()
+    
+    # Show something helpful before we know user status (i.e., before email is entered)
+    if not st.session_state.get("user_email"):
+        if TRIAL_INVITE_CODE:
+            sign_in_caption.caption(
+                "Enter your email to continue. Free trial is invite-only. You can still subscribe without an invite."
+            )
+        else:
+            sign_in_caption.caption(
+                "Enter your email to create an account or continue. New users get 7 free credits."
+            )
 
 
     user_email = st.sidebar.text_input(
@@ -1223,6 +1231,25 @@ def main():
     
         if created:
             st.sidebar.success("Account created — 7 free credits added 🎁")
+
+        # Hide the long sidebar caption for subscribed users and trial users
+        is_subscribed = subscription_status in ("active", "trialing")
+        is_trial_user = (pg_user is not None) and (credits_remaining > 0)
+        
+        if is_subscribed or is_trial_user:
+            sign_in_caption.empty()
+        else:
+            # Keep guidance visible only for brand-new / inactive visitors
+            if TRIAL_INVITE_CODE:
+                sign_in_caption.caption(
+                    "Free trial is invite-only. You can still subscribe without an invite."
+                )
+            else:
+                sign_in_caption.caption(
+                    "New users get 7 free credits."
+                )
+
+
     
         label = "Credits remaining"
         if subscription_status not in ("active", "trialing"):
