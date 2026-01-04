@@ -1176,14 +1176,6 @@ def main():
                 "Enter your email to create an account or continue. New users get 7 free credits."
             )
 
-
-    user_email = st.sidebar.text_input(
-        "Email",
-        value=st.session_state.get("user_email", ""),
-        placeholder="you@clinic.com",
-    ).strip().lower()
-    
-    email_ok = bool(user_email)
     
     # --- Defaults (prevent crashes) ---
     pg_user = None
@@ -1240,7 +1232,8 @@ def main():
             subscription_status = (pg_user[5] or "").lower()
     
         if created:
-            st.sidebar.success("Account created — 7 free credits added 🎁")
+            st.sidebar.success("Account created — please verify email to activate 7 free credits 🎁")
+
 
         # Hide the long sidebar caption for subscribed users and trial users
         is_subscribed = subscription_status in ("active", "trialing")
