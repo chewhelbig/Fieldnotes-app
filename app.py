@@ -1400,7 +1400,7 @@ def main():
     st.sidebar.header("Settings")
     
     if access_ok:
-        output_mode = st.sidebar.radio("Output detail level", ["Short", "Full"], index=1)
+        
     
         generate_reflection = st.sidebar.checkbox(
             "Generate therapist reflection / supervision view",
@@ -1416,7 +1416,7 @@ def main():
         else:
             reflection_intensity = "Deep"
     else:
-        output_mode = "Full"
+        
         generate_reflection = False
         reflection_intensity = "Deep"
 
@@ -1521,6 +1521,17 @@ def main():
         mime="text/plain",
         key="dl_draft_txt"
     )
+    # Output detail level (main UI)
+    if access_ok:
+        output_mode = st.radio(
+            "Output detail level",
+            ["Short", "Full"],
+            index=1,
+            horizontal=True,
+            key="output_mode_main",
+        )
+    else:
+        output_mode = "Full"
 
     # -------------------------
     # Generation eligibility (must be defined for ALL paths)
