@@ -1394,31 +1394,6 @@ def main():
                 except Exception:
                     st.sidebar.info("Credits top-up endpoint not configured yet.")
     
-    st.sidebar.markdown("---")
-    
-    # 4) Settings (only useful once subscribed + access ok)
-    st.sidebar.header("Settings")
-    
-    if access_ok:
-        
-    
-        generate_reflection = st.sidebar.checkbox(
-            "Generate therapist reflection / supervision view",
-            value=False,
-        )
-    
-        if generate_reflection:
-            reflection_intensity = st.sidebar.selectbox(
-                "Reflection intensity",
-                options=["Basic", "Deep", "Very deep"],
-                index=1,
-            )
-        else:
-            reflection_intensity = "Deep"
-    else:
-        
-        generate_reflection = False
-        reflection_intensity = "Deep"
 
     
     st.sidebar.markdown("---")
@@ -1517,14 +1492,16 @@ def main():
     st.download_button(
         label="save draft (.txt)",
         data=(narrative or ""),
-        file_name="fieldnotes_draft.txt",
+        file_name="narrartive_draft.txt",
         mime="text/plain",
         key="dl_draft_txt"
     )
+    # ---------------- Main UI settings (just above Generate button) ----------------
+    
     # Output detail level (main UI)
     if access_ok:
         output_mode = st.radio(
-            "Output detail level",
+            "Clinical Notes Output detail level",
             ["Short", "Full"],
             index=1,
             horizontal=True,
@@ -1532,6 +1509,25 @@ def main():
         )
     else:
         output_mode = "Full"
+                        
+        # Reflection toggle (main UI)
+        generate_reflection = st.checkbox(
+            "Generate therapist reflection / supervision view",
+            value=False,
+            key="generate_reflection_main",
+        )
+        
+    # Reflection intensity (only if reflection is enabled)
+    if generate_reflection:
+        reflection_intensity = st.selectbox(
+            "Reflection intensity",
+            options=["Basic", "Deep", "Very deep"],
+            index=1,
+            key="reflection_intensity_main",
+        )
+    else:
+        reflection_intensity = "Deep"
+
 
     # -------------------------
     # Generation eligibility (must be defined for ALL paths)
