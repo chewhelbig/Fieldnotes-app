@@ -1231,18 +1231,18 @@ def main():
             credits_remaining = int(pg_user[2] or 0)
             subscription_status = (pg_user[5] or "").lower()
     
-        if created:
-        st.sidebar.markdown(
-            """
-            <div style="padding: 0.75rem; background-color: #e6f4ea; border-radius: 0.5rem;">
-                <strong>Account created</strong> — 
-                <a href="#verify-email" style="text-decoration: underline;">
-                    verify email to activate 7 free credits 🎁
-                </a>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+    if created:
+    st.sidebar.markdown(
+        """
+        <div style="padding: 0.75rem; background-color: #e6f4ea; border-radius: 0.5rem;">
+            <strong>Account created</strong> — 
+            <a href="#verify-email" style="text-decoration: underline;">
+                verify email to activate 7 free credits 🎁
+            </a>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 
