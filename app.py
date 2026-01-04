@@ -10,6 +10,10 @@ import requests
 from datetime import date
 import psycopg2
 
+import hashlib
+import secrets
+from datetime import datetime, timedelta, timezone
+
 # ====== database ===========
 def get_pg_conn():
     url = os.environ.get("DATABASE_URL")
@@ -32,15 +36,19 @@ def ensure_pg_schema():
               credits_remaining INT DEFAULT 0,
               monthly_allowance INT DEFAULT 0,
               last_reset DATE,
-
               stripe_customer_id TEXT,
               stripe_subscription_id TEXT,
               subscription_status TEXT,
               current_period_end TIMESTAMPTZ,
-
               created_at TIMESTAMPTZ DEFAULT NOW()
             );
         """)
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_code_hash TEXT;")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_expires_at TIMESTAMPTZ;")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_attempts INT DEFAULT 0;")
+        cur.execute("UPDATE users SET email_verify_attempts = 0 WHERE email_verify_attempts IS NULL;")
+
 
         # ✅ Add subscriber PIN column (safe to run repeatedly)
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS app_pin TEXT;")
@@ -344,6 +352,139 @@ def pg_add_credits(email: str, amount: int) -> None:
         conn.close()
 
 
+# ==========Email Verification ========
+
+
+OTP_TTL_MINUTES = 15
+OTP_MAX_ATTEMPTS = 8
+
+def _hash_code(code: str) -> str:
+    # simple sha256 hash; good enough for OTP storage
+    return hashlib.sha256(code.encode("utf-8")).hexdigest()
+
+def _utcnow():
+    return datetime.now(timezone.utc)
+
+def pg_is_email_verified(email: str) -> bool:
+    conn = get_pg_conn()
+    if conn is None:
+        return False
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT email_verified_at FROM users WHERE email=%s", (email,))
+        row = cur.fetchone()
+        cur.close()
+        return bool(row and row[0])
+    finally:
+        conn.close()
+
+def pg_set_verification_code(email: str, code: str, expires_at):
+    code_hash = _hash_code(code)
+    conn = get_pg_conn()
+    if conn is None:
+        return
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE users
+            SET email_verify_code_hash=%s,
+                email_verify_expires_at=%s,
+                email_verify_attempts=0
+            WHERE email=%s
+            """,
+            (code_hash, expires_at, email),
+        )
+        conn.commit()
+        cur.close()
+    finally:
+        conn.close()
+
+def pg_mark_email_verified(email: str):
+    conn = get_pg_conn()
+    if conn is None:
+        return
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE users
+            SET email_verified_at=NOW(),
+                email_verify_code_hash=NULL,
+                email_verify_expires_at=NULL
+            WHERE email=%s
+            """,
+            (email,),
+        )
+        conn.commit()
+        cur.close()
+    finally:
+        conn.close()
+
+def pg_check_verification_code(email: str, code: str) -> tuple[bool, str]:
+    """
+    Returns (ok, message)
+    """
+    conn = get_pg_conn()
+    if conn is None:
+        return False, "Database unavailable."
+
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT email_verify_code_hash, email_verify_expires_at, email_verify_attempts, email_verified_at
+            FROM users
+            WHERE email=%s
+            """,
+            (email,),
+        )
+        row = cur.fetchone()
+        if not row:
+            cur.close()
+            return False, "No account found."
+
+        code_hash, expires_at, attempts, verified_at = row
+        if verified_at:
+            cur.close()
+            return True, "Already verified."
+
+        if attempts is not None and attempts >= OTP_MAX_ATTEMPTS:
+            cur.close()
+            return False, "Too many attempts. Please request a new code."
+
+        if not code_hash or not expires_at:
+            cur.close()
+            return False, "No active code. Please request a new code."
+
+        # handle timezone-naive timestamps from DB safely
+        now = _utcnow()
+        exp = expires_at
+        try:
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+        except Exception:
+            pass
+
+        if now > exp:
+            cur.close()
+            return False, "Code expired. Please request a new one."
+
+        if _hash_code(code.strip()) != code_hash:
+            # increment attempts
+            cur.execute(
+                "UPDATE users SET email_verify_attempts = COALESCE(email_verify_attempts,0) + 1 WHERE email=%s",
+                (email,),
+            )
+            conn.commit()
+            cur.close()
+            return False, "Incorrect code."
+
+        # correct
+        cur.close()
+        return True, "Verified."
+    finally:
+        conn.close()
 
 
 
