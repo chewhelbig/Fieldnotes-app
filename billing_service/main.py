@@ -79,10 +79,18 @@ def send_onboarding_email(to_email: str, subject: str, text: str, html: str | No
     )
     SendGridAPIClient(api_key).send(msg)
 
-def email_subscription_started_body(trial_user: bool):
-    
+def email_subscription_started_body(trial_user: bool, portal_link: str | None):
+
     landing = "https://psychotherapist.sg/fieldnotes"
     app_url = "https://fieldnotes.psychotherapist.sg"
+
+    manage_text = ""
+    if portal_link:
+        manage_text = f"""
+
+Manage your subscription here:
+{portal_link}
+"""
 
     if trial_user:
         subject = "You’re subscribed — FieldNotes is now fully unlocked ✅"
@@ -100,6 +108,7 @@ Quick guide + SOAP/Contact Cycle explainer:
 
 Open the app:
 {app_url}
+{manage_text}
 
 Warmly,
 Nicole Chew-Helbig
@@ -117,11 +126,14 @@ Quick guide + SOAP/Contact Cycle explainer:
 
 Open the app:
 {app_url}
+{manage_text}
 
 Warmly,
 Nicole Chew-Helbig
 """
+
     return subject, text
+
 
 # --- Optional SendGrid dependency (do not crash app if missing) ---
 SENDGRID_AVAILABLE = True
@@ -288,6 +300,22 @@ async def create_portal_session(payload: dict):
     )
     return {"url": portal.url}
 
+# ======create billing portal link ===========
+def create_billing_portal_link(customer_id: str) -> str | None:
+    if not customer_id:
+        return None
+
+    try:
+        session = stripe.billing_portal.Session.create(
+            customer=customer_id,
+            return_url="https://fieldnotes.psychotherapist.sg",
+        )
+        return session.url
+    except Exception:
+        return None
+
+
+
 @app.post("/webhook")
 async def webhook(request: Request):
     payload = await request.body()
@@ -329,16 +357,27 @@ async def webhook(request: Request):
                 conn.close()
     
             grant_pro_monthly_credits(email)
+
+            
+
             # --- Send subscription onboarding email ---
             try:
                 conn = get_conn()
                 cur = conn.cursor()
                 cur.execute(
-                    "SELECT trial_credits_granted_at FROM users WHERE email = %s",
+                    """
+                    SELECT trial_credits_granted_at, stripe_customer_id
+                    FROM users
+                    WHERE email = %s
+                    """,
                     (email,),
                 )
+
                 row = cur.fetchone()
                 was_trial_user = bool(row and row[0])
+                stripe_customer_id = row[1] if row else None
+                portal_link = create_billing_portal_link(stripe_customer_id)
+
             
                 subject, text = email_subscription_started_body(
                     trial_user=was_trial_user
