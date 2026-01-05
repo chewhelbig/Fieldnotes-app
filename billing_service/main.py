@@ -282,21 +282,24 @@ async def webhook(request: Request):
                     (email,),
                 )
                 row = cur.fetchone()
-            finally:
-                cur.close()
-                conn.close()
-
                 was_trial_user = bool(row and row[0])
-    
+            
                 subject, text = email_subscription_started_body(
                     trial_user=was_trial_user
                 )
                 send_onboarding_email(email, subject=subject, text=text)
-    
+            
             except Exception:
                 # Never break webhook delivery because of email issues
                 pass
             
+            finally:
+                try:
+                    cur.close()
+                    conn.close()
+                except Exception:
+                    pass
+ 
     
         return JSONResponse({"received": True})
 
