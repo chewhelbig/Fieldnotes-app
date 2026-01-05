@@ -49,11 +49,11 @@ def ensure_pg_schema():
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_code_hash TEXT;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_expires_at TIMESTAMPTZ;")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_attempts INT DEFAULT 0;")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_attempts INT NOT NULL DEFAULT 0;")
         cur.execute("UPDATE users SET email_verify_attempts = 0 WHERE email_verify_attempts IS NULL;")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_credits_granted_at TIMESTAMPTZ;")
 
-
-        # ✅ Add subscriber PIN column (safe to run repeatedly)
+        # Subscriber PIN (safe to run repeatedly)
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS app_pin TEXT;")
 
         conn.commit()
@@ -170,14 +170,18 @@ def pg_grant_trial_credits_once(email: str, trial_credits: int = 7) -> bool:
         cur.execute(
             """
             UPDATE users
-            SET credits_remaining=%s, plan='trial'
-            WHERE email=%s
+            SET
+                credits_remaining = %s,
+                monthly_allowance = %s,
+                trial_credits_granted_at = NOW()
+            WHERE email = %s
               AND email_verified_at IS NOT NULL
-              AND (credits_remaining IS NULL OR credits_remaining=0)
-              AND (plan IS NULL OR plan='free')
+              AND credits_remaining = 0
+              AND plan = 'free'
             """,
-            (trial_credits, email),
+            (trial_credits, trial_credits, email),
         )
+
         updated = cur.rowcount
         conn.commit()
         cur.close()
