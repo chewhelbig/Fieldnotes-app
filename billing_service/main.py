@@ -5,6 +5,8 @@ import psycopg2
 import stripe
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 
 app = FastAPI()
 
@@ -49,8 +51,72 @@ def upsert_user(email: str):
     cur.close()
     conn.close()
     return email
+# === send onboarding email ======
+def send_onboarding_email(to_email: str, subject: str, text: str, html: str | None = None):
+    api_key = os.environ.get("SENDGRID_API_KEY", "").strip()
+    from_email = os.environ.get("SENDGRID_FROM_EMAIL", "nicole@psychotherapist.sg").strip()
+
+    if not api_key:
+        raise RuntimeError("SENDGRID_API_KEY missing")
+    if not from_email:
+        raise RuntimeError("SENDGRID_FROM_EMAIL missing")
+
+    msg = Mail(
+        from_email=from_email,
+        to_emails=to_email,
+        subject=subject,
+        plain_text_content=text,
+        html_content=html or None,
+    )
+    SendGridAPIClient(api_key).send(msg)
+
+# ====email subscription started========
+def email_subscription_started_body(trial_user: bool):
+    
+    landing = "https://psychotherapist.sg/fieldnotes"
+    app_url = "https://fieldnotes.psychotherapist.sg"
+
+    if trial_user:
+        subject = "You’re subscribed — FieldNotes is now fully unlocked ✅"
+        text = f"""Dear Colleague,
+
+Welcome officially — your subscription is active.
+
+You now have 100 credits/month, and you can use FieldNotes as your ongoing session companion:
+- clinical notes (SOAP-informed)
+- supervision reflection prompts
+- Contact Cycle structure (when useful)
+
+Quick guide + SOAP/Contact Cycle explainer:
+{landing}
+
+Open the app:
+{app_url}
+
+Warmly,
+Nicole Chew-Helbig
+"""
+    else:
+        subject = "Welcome to FieldNotes — let’s get you set up ✅"
+        text = f"""Dear Colleague,
+
+Welcome to FieldNotes — your subscription is active.
+
+This isn’t just a session-writing tool. It’s designed as a professional companion for better clinical thinking and continuity.
+
+Quick guide + SOAP/Contact Cycle explainer:
+{landing}
+
+Open the app:
+{app_url}
+
+Warmly,
+Nicole Chew-Helbig
+"""
+    return subject, text
 
 
+# === grant monthly credits ==========
 def grant_pro_monthly_credits(email: str):
     """
     Set the user to Pro and grant 100 credits/month (and set current credits to 100).
