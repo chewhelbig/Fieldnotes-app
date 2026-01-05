@@ -53,13 +53,16 @@ def upsert_user(email: str):
     return email
 # === send onboarding email ======
 def send_onboarding_email(to_email: str, subject: str, text: str, html: str | None = None):
+    # Graceful fallback: do nothing if SendGrid isn't available
+    if not SENDGRID_AVAILABLE:
+        return
+
     api_key = os.environ.get("SENDGRID_API_KEY", "").strip()
     from_email = os.environ.get("SENDGRID_FROM_EMAIL", "nicole@psychotherapist.sg").strip()
 
-    if not api_key:
-        raise RuntimeError("SENDGRID_API_KEY missing")
-    if not from_email:
-        raise RuntimeError("SENDGRID_FROM_EMAIL missing")
+    # Graceful fallback: do nothing if not configured
+    if not api_key or not from_email:
+        return
 
     msg = Mail(
         from_email=from_email,
@@ -69,6 +72,7 @@ def send_onboarding_email(to_email: str, subject: str, text: str, html: str | No
         html_content=html or None,
     )
     SendGridAPIClient(api_key).send(msg)
+
 
 # ====email subscription started========
 def email_subscription_started_body(trial_user: bool):
@@ -115,6 +119,15 @@ Nicole Chew-Helbig
 """
     return subject, text
 
+# --- Optional SendGrid dependency (do not crash app if missing) ---
+SENDGRID_AVAILABLE = True
+try:
+    from sendgrid import SendGridAPIClient
+    from sendgrid.helpers.mail import Mail
+except Exception:
+    SENDGRID_AVAILABLE = False
+    SendGridAPIClient = None
+    Mail = None
 
 # === grant monthly credits ==========
 def grant_pro_monthly_credits(email: str):
