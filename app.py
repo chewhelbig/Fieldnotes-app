@@ -1438,8 +1438,6 @@ def main():
     else:
         access_ok = require_app_password_sidebar()
 
-
-
     
     if not email_ok:
         st.sidebar.caption("Enter email first to subscribe.")
@@ -1470,6 +1468,22 @@ def main():
             st.sidebar.success("Subscription: active")
             st.session_state.pop("checkout_url", None)
 
+            # --- Manage subscription link (subscribed users only) ---
+            try:
+                resp = requests.get(
+                    "https://billing.psychotherapist.sg/billing-portal-link",
+                    params={"email": user_email},
+                    timeout=5,
+                )
+                portal_url = resp.json().get("url")
+        
+                if portal_url:
+                    st.sidebar.markdown(
+                        f"[Manage subscription]({portal_url})",
+                        unsafe_allow_html=True,
+                    )
+            except Exception:
+                pass
 
 
 
