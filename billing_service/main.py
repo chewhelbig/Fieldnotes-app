@@ -314,6 +314,26 @@ def create_billing_portal_link(customer_id: str) -> str | None:
     except Exception:
         return None
 
+@app.get("/billing-portal-link")
+def get_billing_portal_link(email: str):
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT stripe_customer_id FROM users WHERE email = %s",
+            (email,),
+        )
+        row = cur.fetchone()
+        cur.close()
+
+        if not row or not row[0]:
+            return {"url": None}
+
+        portal_url = create_billing_portal_link(row[0])
+        return {"url": portal_url}
+
+    finally:
+        conn.close()
 
 
 @app.post("/webhook")
@@ -440,4 +460,6 @@ async def webhook(request: Request):
     
         return JSONResponse({"received": True})
 
+
+    
     return JSONResponse({"received": True})
