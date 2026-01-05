@@ -273,6 +273,30 @@ async def webhook(request: Request):
                 conn.close()
     
             grant_pro_monthly_credits(email)
+            # --- Send subscription onboarding email ---
+            try:
+                conn = get_conn()
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT trial_credits_granted_at FROM users WHERE email = %s",
+                    (email,),
+                )
+                row = cur.fetchone()
+            finally:
+                cur.close()
+                conn.close()
+
+                was_trial_user = bool(row and row[0])
+    
+                subject, text = email_subscription_started_body(
+                    trial_user=was_trial_user
+                )
+                send_onboarding_email(email, subject=subject, text=text)
+    
+            except Exception:
+                # Never break webhook delivery because of email issues
+                pass
+            
     
         return JSONResponse({"received": True})
 
