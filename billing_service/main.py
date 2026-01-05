@@ -7,6 +7,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
+import logging
+
 
 app = FastAPI()
 
@@ -22,6 +24,8 @@ def get_conn():
         raise RuntimeError("DATABASE_URL is missing")
     return psycopg2.connect(url, sslmode="require")
 
+logger = logging.getLogger("billing_service")
+logging.basicConfig(level=logging.INFO)
 
 
 def upsert_user(email: str):
@@ -53,15 +57,17 @@ def upsert_user(email: str):
     return email
 # === send onboarding email ======
 def send_onboarding_email(to_email: str, subject: str, text: str, html: str | None = None):
-    # Graceful fallback: do nothing if SendGrid isn't available
+    # Graceful fallback: do nothing if SendGrid isn't available (but log once)
     if not SENDGRID_AVAILABLE:
+        logger.warning("SendGrid not installed; skipping email to %s", to_email)
         return
 
-    api_key = os.environ.get("SENDGRID_API_KEY", "").strip()
-    from_email = os.environ.get("SENDGRID_FROM_EMAIL", "nicole@psychotherapist.sg").strip()
+    api_key = (os.environ.get("SENDGRID_API_KEY") or "").strip()
+    from_email = (os.environ.get("SENDGRID_FROM_EMAIL") or "nicole@psychotherapist.sg").strip()
 
-    # Graceful fallback: do nothing if not configured
+    # Graceful fallback: do nothing if not configured (but log once)
     if not api_key or not from_email:
+        logger.warning("SendGrid not configured (missing key/from); skipping email to %s", to_email)
         return
 
     msg = Mail(
@@ -73,8 +79,6 @@ def send_onboarding_email(to_email: str, subject: str, text: str, html: str | No
     )
     SendGridAPIClient(api_key).send(msg)
 
-
-# ====email subscription started========
 def email_subscription_started_body(trial_user: bool):
     
     landing = "https://psychotherapist.sg/fieldnotes"
@@ -199,9 +203,48 @@ def add_credits(email: str, amount: int):
     cur.close()
     conn.close()
 
+
+
 @app.get("/health")
 def health():
-    return {"ok": True}
+    # Email availability checks (no email sent)
+    sendgrid_api_key_set = bool((os.environ.get("SENDGRID_API_KEY") or "").strip())
+    sendgrid_from_set = bool((os.environ.get("SENDGRID_FROM_EMAIL") or "").strip())
+
+    email_ready = bool(SENDGRID_AVAILABLE and sendgrid_api_key_set and sendgrid_from_set)
+
+    # Optional DB check (quick)
+    db_ok = False
+    db_error = None
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT 1;")
+        cur.fetchone()
+        cur.close()
+        conn.close()
+        db_ok = True
+    except Exception as e:
+        db_error = str(e)
+
+    payload = {
+        "ok": True,
+        "service": "billing_service",
+        "email": {
+            "sendgrid_installed": bool(SENDGRID_AVAILABLE),
+            "sendgrid_api_key_set": sendgrid_api_key_set,
+            "sendgrid_from_set": sendgrid_from_set,
+            "ready": email_ready,
+        },
+        "db": {
+            "ok": db_ok,
+            "error": db_error,
+        },
+    }
+    return JSONResponse(payload)
+
+
+
 
 @app.post("/create-checkout-session")
 async def create_checkout_session(payload: dict):
