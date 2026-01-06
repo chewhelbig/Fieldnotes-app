@@ -400,8 +400,10 @@ async def webhook(request: Request):
 
             
                 subject, text = email_subscription_started_body(
-                    trial_user=was_trial_user
+                    trial_user=was_trial_user,
+                    portal_link=portal_link,
                 )
+
                 send_onboarding_email(email, subject=subject, text=text)
             
             except Exception:
