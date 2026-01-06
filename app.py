@@ -1721,7 +1721,10 @@ def main():
             if is_subscribed and (not admin) and (not subscriber_pin_ok):
                 st.warning("Please enter your Subscriber PIN in the sidebar to generate.")
                 st.stop()
-    
+           
+            # Clear old notes immediately to avoid stale display on reruns
+            st.session_state["notes_text"] = ""
+
             # 1) NOTES — call OpenAI first; deduct ONLY after success
             try:
                 with st.spinner("Generating clinical notes..."):
@@ -1748,6 +1751,9 @@ def main():
 
                 # 2) REFLECTION (optional)
                 if generate_reflection:
+                    # Clear old reflection immediately to avoid stale display on reruns
+                    st.session_state["reflection_text"] = ""
+                    
                     cost = REFLECTION_COST.get(reflection_intensity, 2)
     
                     try:
