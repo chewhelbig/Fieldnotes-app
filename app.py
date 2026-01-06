@@ -1358,7 +1358,7 @@ def main():
             st.sidebar.info(
                 "Thank you for being here.\n\n"
                 "To generate notes, please "
-                f"[**subscribe here**]({subscribe_url}) "
+                f"subscribe here "
                 "or request a "
                 f"[**free trial of 7 credits here**]({trial_request_url})."
             )
