@@ -1707,7 +1707,7 @@ def main():
             st.warning("Please enter your email in the sidebar to continue.")
         elif not access_ok:
             st.warning("Trial access is locked. Enter the access password in the sidebar, or subscribe.")
-        elif (subscription_status not in ("active", "trialing")) and credits_remaining <= 0:
+        elif (not is_subscribed) and credits_remaining <= 0:
             st.warning("Free trial ended. Please subscribe (USD 29/month) or add credits to continue.")
         elif not narrative.strip():
             st.warning("Please enter a session narrative first.")
