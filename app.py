@@ -1225,197 +1225,170 @@ def main():
     
     email_ok = bool(user_email)
     
-    # Sidebar helper text (only for brand-new / inactive visitors)
-    sign_in_caption = st.sidebar.empty()
+    #___________________________________________________________   
+    # -------------------------
+    # Sidebar: Middle portion (varies depending on email/status)
+    # -------------------------
     
-    # Show something helpful before we know user status (i.e., before email is entered)
-    if not user_email:
-        if TRIAL_INVITE_CODE:
-            sign_in_caption.caption(
-                "Enter your email to continue. Free trial is invite-only. You can still subscribe without an invite."
-            )
-        else:
-            sign_in_caption.caption(
-                "Enter your email to create an account or continue. New users get 7 free credits."
-            )
-
+    subscribe_url = "https://billing.psychotherapist.sg"
+    trial_request_url = "https://psychotherapist.sg/fieldnotes-contact-form"
     
-    # --- Defaults (prevent crashes) ---
+    # Defaults
     pg_user = None
     created = False
     credits_remaining = 0
     subscription_status = ""
-   
-    # --- NEW: define admin / existing_user / trial_allowed BEFORE using them ---
+    existing_user = None
+    
     admin = is_admin(user_email) if email_ok else False
     
-    existing_user = pg_get_user(user_email) if email_ok else None
+    # 0) Opening app (no email)
+    if not email_ok:
+        st.sidebar.info(
+            "Free trial is invite-only. "
+            f"[Request free 7 credits]({trial_request_url}). "
+            f"You can still [subscribe]({subscribe_url}) to use immediately."
+        )
     
-    # Invite-only free trial logic:
-    # - If user already exists -> allow
-    # - If no TRIAL_INVITE_CODE -> open trial
-    # - If TRIAL_INVITE_CODE -> require invite for new users
-    trial_allowed = False
+    else:
+        # Lookup user
+        existing_user = pg_get_user(user_email)
     
-    if email_ok:
-        if existing_user is not None:
-            trial_allowed = True
-        elif not TRIAL_INVITE_CODE:
-            trial_allowed = True
-        else:
-            st.sidebar.markdown("### 🧾 Free trial (invite-only)")
+        # Helper: lapsed subscriber detection (has Stripe ids but not active)
+        has_paid_history = False
+        if existing_user:
+            # pg_user shape from pg_get_user:
+            # (email, plan, credits_remaining, monthly_allowance, last_reset,
+            #  subscription_status, stripe_customer_id, stripe_subscription_id)
+            stripe_customer_id = existing_user[6] if len(existing_user) > 6 else None
+            stripe_subscription_id = existing_user[7] if len(existing_user) > 7 else None
+            has_paid_history = bool(stripe_customer_id or stripe_subscription_id)
+    
+        # -------------------------
+        # 1) Unknown email → show welcome + invite code box
+        # -------------------------
+        if (existing_user is None) and (not admin):
+            st.sidebar.info(
+                "Thank you for being here.\n\n"
+                "To generate notes, please "
+                f"[**subscribe here**]({subscribe_url}) "
+                "or request a "
+                f"[**free trial of 7 credits here**]({trial_request_url})."
+            )
+    
+            st.sidebar.markdown("### 🧾 Trial access code")
+    
             invite = st.sidebar.text_input(
-                "Invite code (required for free trial)",
+                "Trial access code",
                 type="password",
                 key="trial_invite_code",
             ).strip()
     
-            if invite == TRIAL_INVITE_CODE:
-                trial_allowed = True
+            # Only when invite code is correct do we create the user record (so verification can happen next)
+            if TRIAL_INVITE_CODE and invite == TRIAL_INVITE_CODE:
+                pg_user, created = pg_get_or_create_user(user_email, grant_trial=False)
+            elif not TRIAL_INVITE_CODE:
+                # If you ever remove invite-only mode, allow account creation without code
+                pg_user, created = pg_get_or_create_user(user_email, grant_trial=False)
             else:
-                st.sidebar.info("No invite code? You can still subscribe below (paid plan).")
+                pg_user = None
+                created = False
     
-    # ---------------- User creation / refresh ----------------
-    if email_ok:
-        if existing_user is not None:
-            pg_user = existing_user
-            created = False
-        elif trial_allowed:
-            pg_user, created = pg_get_or_create_user(user_email, grant_trial=False)
         else:
-            pg_user = None
-            created = False
+            # -------------------------
+            # Existing user OR admin → load user directly
+            # -------------------------
+            if existing_user is not None:
+                pg_user = existing_user
+                created = False
     
+        # -------------------------
+        # If we have a user row, unpack latest status
+        # -------------------------
         if pg_user:
-            pg_maybe_reset_monthly(user_email)
-            pg_user = pg_refresh_user(user_email)
-    
+            # Unpack tuple consistently
             credits_remaining = int(pg_user[2] or 0)
             subscription_status = (pg_user[5] or "").lower()
     
-    # ---------------- Account created message ----------------
-    if created:
-        st.sidebar.markdown(
-            """
-            <div style="padding: 0.75rem; background-color: #e6f4ea; border-radius: 0.5rem;">
-                <strong>Account created</strong> —
-                <a href="#verify-email" style="text-decoration: underline;">
-                    verify email to activate 7 free credits 🎁
-                </a>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    
-    # ---------------- Sidebar caption visibility ----------------
-    if email_ok and pg_user:
         is_subscribed = subscription_status in ("active", "trialing")
-        is_trial_user = credits_remaining > 0
     
-        if is_subscribed or is_trial_user:
-            sign_in_caption.empty()
-        else:
-            if TRIAL_INVITE_CODE:
-                sign_in_caption.caption(
-                    "Free trial is invite-only. You can still subscribe without an invite."
+        # -------------------------
+        # 2) Admin view (always)
+        # -------------------------
+        if admin:
+            st.sidebar.success("Admin view")
+    
+        # -------------------------
+        # 1c / 1d / 1e / 1f messages for known emails
+        # -------------------------
+        elif existing_user is not None:
+            if is_subscribed:
+                # 1d subscriber
+                st.sidebar.success("Welcome back. Your subscription is live.")
+            elif credits_remaining > 0:
+                # 1c trial user
+                st.sidebar.info(
+                    f"You have **{credits_remaining}** credits remaining. "
+                    f"[**Subscribe here**]({subscribe_url}) for ongoing use (100 credits/month)."
+                )
+            elif has_paid_history:
+                # 1e lapsed subscriber
+                st.sidebar.warning(
+                    "Welcome back. Your subscription is not active. "
+                    f"[**Subscribe here**]({subscribe_url}) to return."
                 )
             else:
-                sign_in_caption.caption(
-                    "New users get 7 free credits."
+                # 1f inactive
+                st.sidebar.info(
+                    "Welcome.\n\n"
+                    "To generate notes, please "
+                    f"[**subscribe here**]({subscribe_url}) "
+                    "or request a "
+                    f"[**free trial of 7 credits here**]({trial_request_url})."
                 )
     
-        label = "Credits remaining"
-        if subscription_status not in ("active", "trialing"):
-            label = "Trial credits remaining"
+        # -------------------------
+        # 1b) After trial access code is correct → show verify email box
+        #     (only for brand new users created via invite code)
+        # -------------------------
+        if (not admin) and pg_user and created and (not is_subscribed):
+            email_verified = pg_is_email_verified(user_email)
     
-        st.sidebar.caption(f"{label}: {credits_remaining}")
-
+            if not email_verified:
+                st.sidebar.markdown("### ✅ Verify email to use credits")
+                st.sidebar.caption("Verification is required before trial credits are granted.")
     
-        if subscription_status in ("active", "trialing"):
-            st.sidebar.caption("Plan: Paid (subscription)")
-        else:
-            if pg_user is not None and credits_remaining > 0:
-                st.sidebar.caption("Plan: Free trial (no card required)")
-            else:
-                st.sidebar.caption("Plan: Not active (subscribe to use)")
+                if st.sidebar.button("Send verification code", key="send_verify_code"):
+                    code = f"{secrets.randbelow(10**6):06d}"
+                    expires_at = _utcnow() + timedelta(minutes=OTP_TTL_MINUTES)
+                    pg_set_verification_code(user_email, code, expires_at)
     
-        if subscription_status not in ("active", "trialing"):
-            if st.sidebar.button("🔄 Refresh credits/subscription"):
-                st.rerun()
-            st.sidebar.caption("Use this after payment if credits don’t update immediately.")
-    else:
-        st.sidebar.info("Enter your email to activate credits and generation.")
-    
-    # -------------------------
-    # Email verification (required for free trial credits)
-    # -------------------------
-    email_verified = False
-    if email_ok and pg_user:
-        email_verified = pg_is_email_verified(user_email)
-    
-    is_subscribed = subscription_status in ("active", "trialing")
-    is_trial_user = (pg_user is not None) and (credits_remaining > 0)
-    is_brand_new = (pg_user is not None) and (credits_remaining == 0) and (not is_subscribed)
-    
-    is_subscribed = (subscription_status or "").lower() in ("active", "trialing")
-    
-    # show verify only if they still need it
-    show_verify_email = (
-        email_ok
-        and (pg_user is not None)
-        and (not is_subscribed)
-        and (not email_verified)
-        and (credits_remaining <= 0)
-    )
-    st.sidebar.markdown('<div id="verify-email"></div>', unsafe_allow_html=True)
-    if show_verify_email:
-        
-        st.sidebar.markdown("### ✅ Verify email (required for free trial)")
-    
-        if st.sidebar.button("Send verification code", key="send_verify_code"):
-            code = f"{secrets.randbelow(10**6):06d}"
-            expires_at = _utcnow() + timedelta(minutes=OTP_TTL_MINUTES)
-    
-            pg_set_verification_code(user_email, code, expires_at)
-    
-            try:
-                send_verification_email(user_email, code)
-                st.sidebar.success("Verification code sent. Check your email.")
-            except Exception as e:
-                st.sidebar.error("Could not send verification email.")
-                st.sidebar.exception(e)
-    
-        entered_code = st.sidebar.text_input(
-            "Enter 6-digit verification code",
-            key="verify_code_input",
-        )
-    
-        if st.sidebar.button("Verify email", key="btn_verify_email"):
-            ok, msg = pg_check_verification_code(user_email, entered_code)
-            if ok:
-                pg_mark_email_verified(user_email)
-        
-                granted = pg_grant_trial_credits_once(user_email, trial_credits=7)
-                if granted:
-                    st.sidebar.success("Email verified — 7 free credits added 🎁")
-        
-                    # ✅ ADD THIS (send onboarding email after trial activation)
                     try:
-                        subject, text = email_trial_verified_body()
-                        send_onboarding_email(user_email, subject=subject, text=text)
+                        send_verification_email(user_email, code)
+                        st.sidebar.success("Verification code sent. Check your email.")
                     except Exception as e:
-                        # Don't break the app if email fails
-                        st.sidebar.caption("Note: welcome email could not be sent.")
-                        # optional for debugging:
-                        # st.sidebar.exception(e)
-        
-                else:
-                    st.sidebar.success("Email verified.")
-        
-                st.rerun()
-            else:
-                st.sidebar.warning(msg)
-
+                        st.sidebar.error("Could not send verification email.")
+                        st.sidebar.exception(e)
+    
+                entered_code = st.sidebar.text_input(
+                    "Enter 6-digit verification code",
+                    key="verify_code_input",
+                )
+    
+                if st.sidebar.button("Verify email", key="btn_verify_email"):
+                    ok, msg = pg_check_verification_code(user_email, entered_code)
+                    if ok:
+                        pg_mark_email_verified(user_email)
+    
+                        granted = pg_grant_trial_credits_once(user_email, trial_credits=7)
+                        if granted:
+                            st.sidebar.success("Email verified — 7 free credits added 🎁")
+                        else:
+                            st.sidebar.info("Email verified. Trial credits were already granted earlier.")
+    
+                        st.rerun()
+                    else:
+                        st.sidebar.error(msg)
 
     
     st.sidebar.markdown("---")
