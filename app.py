@@ -1499,7 +1499,7 @@ def main():
     # -------------------------
     # Access gate (soft gate)
     # -------------------------
-    is_subscribed = subscription_status in ("active", "trialing")
+    is_subscribed = (subscription_status or "").lower() in ("active", "trialing")
     
     if not email_ok:
         access_ok = False
@@ -1508,23 +1508,23 @@ def main():
     elif admin or is_subscribed:
         access_ok = True
     
-    # ✅ Trial users who already HAVE credits may generate
+    # Trial users who already HAVE credits may generate
     elif credits_remaining > 0:
         access_ok = True
     
-    # Everyone else must enter the access password
+    # Everyone else must enter the access password (if you still use it)
     else:
         access_ok = require_app_password_sidebar()
-
     
+    
+    # -------------------------
+    # Subscribe / Credits UI (only after email is entered)
+    # -------------------------
     if not email_ok:
         st.sidebar.caption("Enter email first to subscribe.")
     else:
         if not is_subscribed:
-            st.sidebar.warning("Paid plan: USD 29/month")
-            st.sidebar.caption("Subscription unlocks 100 credits/month.")
-            st.sidebar.caption("Credits reset monthly. Unused credits do not roll over.")
-
+            # 1) Button FIRST
             if st.sidebar.button("Subscribe USD 29/month", key="btn_subscribe_monthly"):
                 try:
                     r = requests.post(
@@ -1537,17 +1537,20 @@ def main():
                 except Exception as e:
                     st.sidebar.error("Could not start checkout. Please try again.")
                     st.sidebar.exception(e)
-            
+    
             checkout_url = st.session_state.get("checkout_url")
             if checkout_url:
                 st.sidebar.link_button("Open Stripe Checkout", checkout_url)
-
+    
+            # 2) Text AFTER the button
+            st.sidebar.warning("Paid plan: USD 29/month")
+            st.sidebar.caption("Subscription unlocks 100 credits/month.")
+            st.sidebar.caption("Credits reset monthly. Unused credits do not roll over.")
+    
         else:
             st.sidebar.success("Subscription: active")
             st.session_state.pop("checkout_url", None)
     
-  
-
             # --- Manage subscription link (subscribed users only) ---
             try:
                 resp = requests.get(
@@ -1555,18 +1558,14 @@ def main():
                     params={"email": user_email},
                     timeout=5,
                 )
-                
+                resp.raise_for_status()
                 portal_url = resp.json().get("url")
-        
+    
                 if portal_url:
-                    st.sidebar.markdown(
-                        f"[Manage subscription]({portal_url})",
-                        unsafe_allow_html=True,
-                    )
+                    st.sidebar.markdown(f"[Manage subscription]({portal_url})")
             except Exception:
                 pass
-
-
+    
 
             # -------------------------
             # -------------------------
