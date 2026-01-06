@@ -737,6 +737,24 @@ BILLING_API_URL = os.getenv(
     "https://fieldnotes-billing.onrender.com"
 )
 
+def start_stripe_checkout(email: str) -> str | None:
+    """Create Stripe Checkout Session and return checkout URL."""
+    email = (email or "").strip().lower()
+    if not email:
+        return None
+
+    try:
+        r = requests.post(
+            f"{BILLING_API_URL}/create-checkout-session",
+            json={"email": email},
+            timeout=30,
+        )
+        r.raise_for_status()
+        data = r.json()
+        return data.get("url")
+    except Exception:
+        return None
+
 
 # ==================
 # Credits
@@ -1527,6 +1545,8 @@ def main():
         else:
             st.sidebar.success("Subscription: active")
             st.session_state.pop("checkout_url", None)
+    
+  
 
             # --- Manage subscription link (subscribed users only) ---
             try:
@@ -1674,7 +1694,23 @@ def main():
     
     # 4) Trial user with remaining credits
     elif credits_remaining > 0:
-        st.info(f"You have **{credits_remaining}** credits remaining.[Subscribe]({subscribe_url}) for ongoing use (100 credits/month).")
+        st.info(
+            f"You have **{credits_remaining}** credits remaining. "
+            "Subscribe for ongoing use (100 credits/month)."
+        )
+    
+        # 👉 PLACE SUBSCRIBE BUTTON HERE
+        if st.button("Subscribe here", key=f"subscribe_trial_{user_email}"):
+            url = start_stripe_checkout(user_email)
+            if url:
+                st.session_state["checkout_url"] = url
+            else:
+                st.error("Could not start Stripe checkout. Please try again.")
+    
+        checkout_url = st.session_state.get("checkout_url")
+        if checkout_url:
+            st.link_button("Open secure Stripe checkout", checkout_url)
+    
     
     # 5) No credits and not subscribed → differentiate new vs lapsed subscriber vs inactive
     else:
@@ -1682,17 +1718,67 @@ def main():
             # 1a) Brand new email (just created in DB)
             st.info(
                 "Thank you for being here.\n\n"
-                "To generate notes, please [**subscribe**]({subscribe_url}), or request a [**free trial of 7 credits**]({trial_request_url})"
+                "To generate notes, please subscribe, or request a "
+                "[**free trial of 7 credits**]("
+                f"{trial_request_url}"
+                ")."
             )
+    
+            # 👉 PLACE SUBSCRIBE BUTTON HERE
+            if st.button("Subscribe here", key=f"subscribe_new_{user_email}"):
+                url = start_stripe_checkout(user_email)
+                if url:
+                    st.session_state["checkout_url"] = url
+                else:
+                    st.error("Could not start Stripe checkout. Please try again.")
+    
+            checkout_url = st.session_state.get("checkout_url")
+            if checkout_url:
+                st.link_button("Open secure Stripe checkout", checkout_url)
+    
+    
         elif has_paid_history:
             # 1e) Subscriber who is no longer subscribed
-            st.warning("Welcome back. Your subscription is not active. Please [subscribe]({subscribe_url}) again to return.")
+            st.warning(
+                "Welcome back. Your subscription is not active. "
+                "Please subscribe again to return."
+            )
+    
+            # 👉 PLACE SUBSCRIBE BUTTON HERE
+            if st.button("Subscribe again", key=f"subscribe_lapsed_{user_email}"):
+                url = start_stripe_checkout(user_email)
+                if url:
+                    st.session_state["checkout_url"] = url
+                else:
+                    st.error("Could not start Stripe checkout. Please try again.")
+    
+            checkout_url = st.session_state.get("checkout_url")
+            if checkout_url:
+                st.link_button("Open secure Stripe checkout", checkout_url)
+    
+    
         else:
-            # “Inactive / no trial credits” user (not new, not subscriber)
+            # 1f) Inactive (not new, not subscribed)
             st.info(
                 "Welcome.\n\n"
-                "To generate notes, please [**subscribe**]({subscribe_url}), or request a [**free trial of 7 credits**]({trial_request_url})"
+                "To generate notes, please subscribe, or request a "
+                "[**free trial of 7 credits**]("
+                f"{trial_request_url}"
+                ")."
             )
+    
+            # 👉 PLACE SUBSCRIBE BUTTON HERE
+            if st.button("Subscribe here", key=f"subscribe_inactive_{user_email}"):
+                url = start_stripe_checkout(user_email)
+                if url:
+                    st.session_state["checkout_url"] = url
+                else:
+                    st.error("Could not start Stripe checkout. Please try again.")
+    
+            checkout_url = st.session_state.get("checkout_url")
+            if checkout_url:
+                st.link_button("Open secure Stripe checkout", checkout_url)
+    
     
     # Optional: keep an “Account” line, but only once email exists
     if email_ok:
