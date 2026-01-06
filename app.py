@@ -1497,7 +1497,7 @@ def main():
             # -------------------------
             # Subscriber PIN gate (optional)
             # -------------------------
-            subscriber_pin_ok = True
+            subscriber_pin_ok = st.session_state.get("subscriber_pin_ok", True)
             
             if is_subscribed and email_ok and not admin:
                 st.sidebar.markdown("### 🔐 Subscriber PIN (optional)")
@@ -1510,6 +1510,8 @@ def main():
                         if new_pin.isdigit() and 4 <= len(new_pin) <= 8:
                             pg_set_app_pin(user_email, new_pin)
                             st.sidebar.success("PIN saved.")
+                            # After setting a new PIN, require entry on next run
+                            st.session_state["subscriber_pin_ok"] = False
                             st.rerun()
                         else:
                             st.sidebar.error("PIN must be 4–8 digits.")
@@ -1517,13 +1519,9 @@ def main():
                     entered_pin = st.sidebar.text_input("Enter PIN to generate", type="password", key="enter_pin")
                     st.session_state["subscriber_pin_ok"] = bool(entered_pin) and (entered_pin == current_pin)
                     subscriber_pin_ok = st.session_state["subscriber_pin_ok"]
-
+            
                     if not subscriber_pin_ok:
                         st.sidebar.caption("Enter your PIN to enable generation.")
-        
-
-    
-
             
     
             # Optional: Add credits button (depends on your billing backend)
@@ -1638,7 +1636,7 @@ def main():
     st.download_button(
         label="save draft (.txt)",
         data=(narrative or ""),
-        file_name="narrartive_draft.txt",
+        file_name="fieldnotes_draft.txt",
         mime="text/plain",
         key="dl_draft_txt"
     )
