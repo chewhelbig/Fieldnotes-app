@@ -1224,6 +1224,24 @@ def main():
     ).strip().lower()
     
     email_ok = bool(user_email)
+
+    ADMIN_EMAILS = set(e.strip().lower() for e in os.getenv("FIELDNOTES_ADMIN_EMAILS","").split(",") if e.strip())
+    ADMIN_CODE = os.getenv("FIELDNOTES_ADMIN_CODE","").strip()
+    
+    admin = False
+    if email_ok and user_email in ADMIN_EMAILS:
+        if not ADMIN_CODE:
+            # If you forget to set the env var, fail closed (no admin)
+            admin = False
+        else:
+            st.sidebar.markdown("### 🛡️ Admin")
+            entered = st.sidebar.text_input("Admin code", type="password", key="admin_code").strip()
+            if entered == ADMIN_CODE:
+                admin = True
+            else:
+                st.sidebar.caption("Enter admin code to enable admin features.")
+
+
     
     #___________________________________________________________   
     # -------------------------
@@ -1406,14 +1424,8 @@ def main():
                         st.rerun()
                     else:
                         st.sidebar.error(msg)
-
     
-    st.sidebar.markdown("---")
-    
-    
-    # 3) Subscribe / Add credits (only after email)
-    st.sidebar.markdown("### 💳 Subscribe / Credits")
-    
+ 
    
     # -------------------------
     # Access gate (soft gate)
