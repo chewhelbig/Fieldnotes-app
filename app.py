@@ -1572,39 +1572,64 @@ def main():
         "Use the download buttons to save to your own device."
     )
 
-    # --- Gate 1: Email first (sign in / sign up) ---
+    # ---------------- Main status / welcome messaging (main column) ----------------
+    
+    subscribe_url = "https://billing.psychotherapist.sg"  # optional: your billing portal domain (or remove)
+    trial_request_url = "https://psychotherapist.sg/fieldnotes-contact-form"
+    
+    # Define subscription state safely
+    is_subscribed = (subscription_status or "").lower() in ("active", "trialing")
+    
+    # Detect “lapsed subscriber” (has Stripe ids but is not active anymore)
+    has_paid_history = False
+    if pg_user:
+        # pg_user shape from pg_get_user:
+        # (email, plan, credits_remaining, monthly_allowance, last_reset,
+        #  subscription_status, stripe_customer_id, stripe_subscription_id)
+        stripe_customer_id = pg_user[6] if len(pg_user) > 6 else None
+        stripe_subscription_id = pg_user[7] if len(pg_user) > 7 else None
+        has_paid_history = bool(stripe_customer_id or stripe_subscription_id)
+    
+    # 1) No email yet → ALWAYS show this (and do NOT show “trial ended”)
     if not email_ok:
-        st.subheader("Welcome")
-        st.write("Enter your email in the sidebar to sign in or create an account.")
-        if TRIAL_INVITE_CODE:
-            st.write("Free trial is **invite-only**. [Request free 7 credits](https://psychotherapist.sg/fieldnotes-contact-form). You can still subscribe to use immediately.")
-        else:
-            st.write("New accounts start with **7 free credits**.")
-
-        # Soft return: show UI but block generation
-        can_generate = False
-
+        st.info("Please input your email in the sidebar to begin.")
     
-    # (Optional) invite-only gate (keeps your beta list behavior)
-   
+    # 2) Admin
+    elif admin:
+        st.success("Admin access: generation enabled.")
     
-    st.subheader("Account")
-    st.write(f"Signed in as: **{user_email}**")
-
-    
-    # --- Trial / billing status (informational only; do NOT stop the app UI) ---
-    is_subscribed = subscription_status in ("active", "trialing")
-    
-    if admin:
-        st.info("Admin access: generation enabled.")
+    # 3) Active subscriber
     elif is_subscribed:
-        st.success("Subscription active.")
-    elif credits_remaining > 0:
-        st.info(f"Free trial: {credits_remaining} credits remaining.")
-    else:
-        st.warning("Free trial ended. Please subscribe to continue.")
+        st.success("Your subscription is live.")
     
-
+    # 4) Trial user with remaining credits
+    elif credits_remaining > 0:
+        st.info(f"You have **{credits_remaining}** credits remaining. Subscribe for ongoing use (100 credits/month).")
+    
+    # 5) No credits and not subscribed → differentiate new vs lapsed subscriber vs inactive
+    else:
+        if created:
+            # 1a) Brand new email (just created in DB)
+            st.info(
+                "Thank you for being here.\n\n"
+                "To generate notes, please **subscribe** (see the sidebar), or request a **free trial of 7 credits** here:\n"
+                f"{trial_request_url}"
+            )
+        elif has_paid_history:
+            # 1e) Subscriber who is no longer subscribed
+            st.warning("Welcome back. Your subscription is not active. Please subscribe again to return.")
+        else:
+            # “Inactive / no trial credits” user (not new, not subscriber)
+            st.info(
+                "Welcome.\n\n"
+                "To generate notes, please **subscribe** (see the sidebar), or request a **free trial of 7 credits** here:\n"
+                f"{trial_request_url}"
+            )
+    
+    # Optional: keep an “Account” line, but only once email exists
+    if email_ok:
+        st.subheader("Account")
+        st.write(f"Signed in as: **{user_email}**")
 
 
     # Client label (not stored)
