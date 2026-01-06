@@ -1696,8 +1696,7 @@ def main():
     
    
 
-
-
+    
     # ===== Generate button (main area) =====
     if st.button("Generate structured output", disabled=not can_generate):
     
@@ -1718,6 +1717,11 @@ def main():
         if generate_now:
             combined_narrative = narrative
     
+            # Enforce subscriber PIN only for active/trialing subscribers (non-admin)
+            if is_subscribed and (not admin) and (not subscriber_pin_ok):
+                st.warning("Please enter your Subscriber PIN in the sidebar to generate.")
+                st.stop()
+    
             # 1) NOTES — call OpenAI first; deduct ONLY after success
             try:
                 with st.spinner("Generating clinical notes..."):
@@ -1730,8 +1734,8 @@ def main():
                 st.error("OpenAI request failed. No credits were used.")
                 st.exception(e)
                 notes_text = ""
-                # no st.stop()
-    
+                st.stop()
+
             if notes_text:
                 # Deduct ONLY after success
                 if not admin:
