@@ -1678,8 +1678,9 @@ def main():
     # -------------------------
     is_subscribed = subscription_status in ("active", "trialing")
     
-    # Default: PIN gate passes unless subscriber has a PIN set and hasn't entered it
-    subscriber_pin_ok = True
+    # Default from session_state (set by the Subscriber PIN UI)
+    subscriber_pin_ok = st.session_state.get("subscriber_pin_ok", True)
+
     
     # If you implemented subscriber PIN UI, it should set subscriber_pin_ok accordingly.
     # But even if not, the default above prevents NameError.
