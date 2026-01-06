@@ -282,7 +282,17 @@ def pg_refresh_user(email: str):
     """
     return pg_get_user(email)
 
-def pg_get_app_pin(email: str) -> str | None:
+# -------------------------
+# Subscriber PIN (store HASH, never store the raw PIN)
+# -------------------------
+def _pin_hash(pin: str) -> str:
+    pepper = (os.environ.get("APP_PIN_PEPPER") or "").strip()
+    if not pepper:
+        raise RuntimeError("Missing APP_PIN_PEPPER (Render env var).")
+    data = f"{pepper}:{pin}".encode("utf-8")
+    return hashlib.sha256(data).hexdigest()
+
+def pg_get_app_pin_hash(email: str) -> str | None:
     email = (email or "").strip().lower()
     if not email:
         return None
@@ -298,7 +308,7 @@ def pg_get_app_pin(email: str) -> str | None:
     finally:
         conn.close()
 
-def pg_set_app_pin(email: str, pin: str) -> None:
+def pg_set_app_pin_hash(email: str, pin: str) -> None:
     email = (email or "").strip().lower()
     if not email:
         return
@@ -307,11 +317,22 @@ def pg_set_app_pin(email: str, pin: str) -> None:
         return
     try:
         cur = conn.cursor()
-        cur.execute("UPDATE users SET app_pin=%s WHERE email=%s", (pin, email))
+        cur.execute("UPDATE users SET app_pin=%s WHERE email=%s", (_pin_hash(pin), email))
         conn.commit()
         cur.close()
     finally:
         conn.close()
+
+def pg_check_app_pin(email: str, entered_pin: str) -> bool:
+    try:
+        stored = pg_get_app_pin_hash(email)
+        if not stored:
+            return False
+        return _pin_hash(entered_pin) == stored
+    except Exception:
+        # If pepper missing or any error, fail closed
+        return False
+
 
 # --- Prevent double-click spending (UI lock) ---
 if "is_generating" not in st.session_state:
@@ -1527,34 +1548,50 @@ def main():
 
 
             # -------------------------
-            # Subscriber PIN gate (optional)
             # -------------------------
-            subscriber_pin_ok = st.session_state.get("subscriber_pin_ok", True)
+            # Subscriber PIN gate (REQUIRED for subscribers, admin bypass)
+            # -------------------------
             
-            if is_subscribed and email_ok and not admin:
-                st.sidebar.markdown("### 🔐 Subscriber PIN (optional)")
+            # Default: if you're a subscriber and not admin, assume NOT OK until proven
+            if "subscriber_pin_ok" not in st.session_state:
+                st.session_state["subscriber_pin_ok"] = True
             
-                current_pin = pg_get_app_pin(user_email)
+            if is_subscribed and email_ok and (not admin):
+                st.sidebar.markdown("### 🔐 Subscriber PIN (required)")
             
-                if not current_pin:
-                    new_pin = st.sidebar.text_input("Set a PIN (4–8 digits)", type="password", key="set_pin")
+                current_pin_hash = pg_get_app_pin_hash(user_email)
+            
+                # If subscriber has never set a PIN yet
+                if not current_pin_hash:
+                    st.sidebar.info("Set a PIN to protect your account. You’ll use it each time you sign in.")
+            
+                    new_pin_1 = st.sidebar.text_input("Create PIN (4–8 digits)", type="password", key="set_pin_1").strip()
+                    new_pin_2 = st.sidebar.text_input("Confirm PIN", type="password", key="set_pin_2").strip()
+            
                     if st.sidebar.button("Save PIN", key="save_pin"):
-                        if new_pin.isdigit() and 4 <= len(new_pin) <= 8:
-                            pg_set_app_pin(user_email, new_pin)
-                            st.sidebar.success("PIN saved.")
-                            # After setting a new PIN, require entry on next run
+                        if (not new_pin_1.isdigit()) or not (4 <= len(new_pin_1) <= 8):
+                            st.sidebar.error("PIN must be 4–8 digits.")
+                        elif new_pin_1 != new_pin_2:
+                            st.sidebar.error("PINs do not match.")
+                        else:
+                            pg_set_app_pin_hash(user_email, new_pin_1)
+                            st.sidebar.success("PIN saved. Please enter it to enable generation.")
                             st.session_state["subscriber_pin_ok"] = False
                             st.rerun()
-                        else:
-                            st.sidebar.error("PIN must be 4–8 digits.")
+            
+                    # Until a PIN exists, generation must be blocked
+                    st.session_state["subscriber_pin_ok"] = False
+            
+                # PIN exists → require entry every session to generate
                 else:
-                    entered_pin = st.sidebar.text_input("Enter PIN to generate", type="password", key="enter_pin")
-                    st.session_state["subscriber_pin_ok"] = bool(entered_pin) and (entered_pin == current_pin)
-                    subscriber_pin_ok = st.session_state["subscriber_pin_ok"]
+                    entered_pin = st.sidebar.text_input("Enter PIN to enable generation", type="password", key="enter_pin").strip()
             
-                    if not subscriber_pin_ok:
+                    ok = bool(entered_pin) and pg_check_app_pin(user_email, entered_pin)
+                    st.session_state["subscriber_pin_ok"] = ok
+            
+                    if not ok:
                         st.sidebar.caption("Enter your PIN to enable generation.")
-            
+ 
     
             # Optional: Add credits button (depends on your billing backend)
             # If you already built a credits checkout endpoint, set it here:
@@ -1734,7 +1771,12 @@ def main():
     is_subscribed = subscription_status in ("active", "trialing")
     
     # Default from session_state (set by the Subscriber PIN UI)
-    subscriber_pin_ok = st.session_state.get("subscriber_pin_ok", True)
+    # Default: subscribers must enter PIN (fail-closed), others default OK
+    if is_subscribed and (not admin):
+        subscriber_pin_ok = st.session_state.get("subscriber_pin_ok", False)
+    else:
+        subscriber_pin_ok = st.session_state.get("subscriber_pin_ok", True)
+
 
     
     # If you implemented subscriber PIN UI, it should set subscriber_pin_ok accordingly.
