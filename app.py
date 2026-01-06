@@ -1741,14 +1741,11 @@ def main():
                 if not admin:
                     if not pg_try_deduct_credits(user_email, COST_GENERATE_NOTES):
                         st.warning("Not enough credits to save this generation. Please top up and try again.")
-                        # no st.stop()
-                    else:
-                        st.session_state["notes_text"] = notes_text
-                        st.session_state["gen_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M")
-                else:
-                    st.session_state["notes_text"] = notes_text
-                    st.session_state["gen_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    
+                        st.stop()
+                # Save output (admin OR successful deduction)
+                st.session_state["notes_text"] = notes_text
+                st.session_state["gen_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M")
+
                 # 2) REFLECTION (optional)
                 if generate_reflection:
                     cost = REFLECTION_COST.get(reflection_intensity, 2)
@@ -1770,15 +1767,11 @@ def main():
                         if not admin:
                             if not pg_try_deduct_credits(user_email, cost):
                                 st.warning("Not enough credits to save this reflection.")
-                                # no st.stop()
-                            else:
-                                st.session_state["reflection_text"] = reflection
-                        else:
-                            st.session_state["reflection_text"] = reflection
+                                st.stop()
+                        st.session_state["reflection_text"] = reflection
                     else:
                         st.session_state["reflection_text"] = ""
-                else:
-                    st.session_state["reflection_text"] = ""
+
 
 
     # ALWAYS read from session_state (survives reruns + downloads)
