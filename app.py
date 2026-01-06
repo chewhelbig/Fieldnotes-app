@@ -1311,7 +1311,24 @@ def main():
             subscription_status = (pg_user[5] or "").lower()
     
         is_subscribed = subscription_status in ("active", "trialing")
-    
+        # -------------------------
+        # Subscriber PIN gate (for subscribers only; UI still shows)
+        # -------------------------
+        SUBSCRIBER_PIN = os.getenv("SUBSCRIBER_PIN", "").strip()
+        
+        subscriber_pin_ok = True  # default for non-subscribers / admin
+        if (not admin) and is_subscribed and SUBSCRIBER_PIN:
+            st.sidebar.markdown("### 🔒 Subscriber PIN")
+            pin_entered = st.sidebar.text_input(
+                "Enter your subscriber PIN",
+                type="password",
+                key="subscriber_pin_input",
+            ).strip()
+        
+            if pin_entered != SUBSCRIBER_PIN:
+                subscriber_pin_ok = False
+                st.sidebar.caption("Enter the PIN to enable generation.")
+
         # -------------------------
         # 2) Admin view (always)
         # -------------------------
