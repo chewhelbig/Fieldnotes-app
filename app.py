@@ -1604,7 +1604,7 @@ def main():
     
     # 4) Trial user with remaining credits
     elif credits_remaining > 0:
-        st.info(f"You have **{credits_remaining}** credits remaining. Subscribe for ongoing use (100 credits/month).")
+        st.info(f"You have **{credits_remaining}** credits remaining.[Subscribe]({subscribe_url}) for ongoing use (100 credits/month).")
     
     # 5) No credits and not subscribed → differentiate new vs lapsed subscriber vs inactive
     else:
@@ -1612,18 +1612,16 @@ def main():
             # 1a) Brand new email (just created in DB)
             st.info(
                 "Thank you for being here.\n\n"
-                "To generate notes, please **subscribe** (see the sidebar), or request a **free trial of 7 credits** here:\n"
-                f"{trial_request_url}"
+                "To generate notes, please [**subscribe**]({subscribe_url}), or request a [**free trial of 7 credits**]({trial_request_url})"
             )
         elif has_paid_history:
             # 1e) Subscriber who is no longer subscribed
-            st.warning("Welcome back. Your subscription is not active. Please subscribe again to return.")
+            st.warning("Welcome back. Your subscription is not active. Please [subscribe]({subscribe_url}) again to return.")
         else:
             # “Inactive / no trial credits” user (not new, not subscriber)
             st.info(
                 "Welcome.\n\n"
-                "To generate notes, please **subscribe** (see the sidebar), or request a **free trial of 7 credits** here:\n"
-                f"{trial_request_url}"
+                "To generate notes, please [**subscribe**]({subscribe_url}), or request a [**free trial of 7 credits**]({trial_request_url})"
             )
     
     # Optional: keep an “Account” line, but only once email exists
