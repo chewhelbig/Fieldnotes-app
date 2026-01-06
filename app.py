@@ -526,7 +526,7 @@ def pg_check_verification_code(email: str, code: str) -> tuple[bool, str]:
 
 def send_verification_email(to_email: str, code: str):
     api_key = os.environ.get("SENDGRID_API_KEY", "")
-    from_email = os.environ.get("FROM_EMAIL", "")
+    from_email = os.environ.get("SENDGRID_FROM_EMAIL", "")
     if not api_key or not from_email:
         raise RuntimeError("Missing SENDGRID_API_KEY or FROM_EMAIL env var.")
 
