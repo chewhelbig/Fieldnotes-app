@@ -1334,7 +1334,7 @@ def main():
         st.sidebar.info(
             "Free trial is invite-only. "
             f"[Request free 7 credits]({trial_request_url}). "
-            f"You can still [subscribe]({subscribe_url}) to use immediately."
+            f"You can still subscribe to use immediately."
         )
     
     else:
