@@ -1531,10 +1531,11 @@ def main():
             # --- Manage subscription link (subscribed users only) ---
             try:
                 resp = requests.get(
-                    "https://billing.psychotherapist.sg/billing-portal-link",
+                    f"{BILLING_API_URL}/billing-portal-link",
                     params={"email": user_email},
                     timeout=5,
                 )
+                
                 portal_url = resp.json().get("url")
         
                 if portal_url:
