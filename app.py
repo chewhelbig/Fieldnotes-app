@@ -1497,25 +1497,19 @@ def main():
  
    
     # -------------------------
-    # Access gate (soft gate)
     # -------------------------
+    # Access gate (UPDATED)
+    # -------------------------
+    # 🔒 IMPORTANT:
+    # We do NOT show the global access password to brand-new users.
+    # Subscribers are protected via their personal PIN (app_pin) instead.
     is_subscribed = (subscription_status or "").lower() in ("active", "trialing")
     
-    if not email_ok:
-        access_ok = False
+    # Only used to decide if "Generate" actions are allowed later.
+    # (UI should still show even if access_ok is False.)
+    access_ok = bool(email_ok) and (admin or is_subscribed or (credits_remaining > 0))
     
-    # Admins and subscribers always allowed
-    elif admin or is_subscribed:
-        access_ok = True
-    
-    # Trial users who already HAVE credits may generate
-    elif credits_remaining > 0:
-        access_ok = True
-    
-    # Everyone else must enter the access password (if you still use it)
-    else:
-        access_ok = require_app_password_sidebar()
-    
+        
     
     # -------------------------
     # Subscribe / Credits UI (only after email is entered)
@@ -1550,7 +1544,54 @@ def main():
         else:
             st.sidebar.success("Subscription: active")
             st.session_state.pop("checkout_url", None)
-    
+
+        # -------------------------
+        # Subscriber PIN gate (REQUIRED for subscribers, admin bypass)
+        # -------------------------
+        
+        # Default: if you're a subscriber and not admin, assume NOT OK until proven
+        if "subscriber_pin_ok" not in st.session_state:
+            st.session_state["subscriber_pin_ok"] = True
+        
+        if is_subscribed and email_ok and (not admin):
+            st.sidebar.markdown("### 🔐 Subscriber PIN (required)")
+        
+            current_pin_hash = pg_get_app_pin_hash(user_email)
+        
+            # If subscriber has never set a PIN yet
+            if not current_pin_hash:
+                st.sidebar.info("Set a PIN to protect your account. You’ll use it each time you sign in.")
+        
+                new_pin_1 = st.sidebar.text_input("Create PIN (4–8 digits)", type="password", key="set_pin_1").strip()
+                new_pin_2 = st.sidebar.text_input("Confirm PIN", type="password", key="set_pin_2").strip()
+        
+                if st.sidebar.button("Save PIN", key="save_pin"):
+                    if (not new_pin_1.isdigit()) or not (4 <= len(new_pin_1) <= 8):
+                        st.sidebar.error("PIN must be 4–8 digits.")
+                    elif new_pin_1 != new_pin_2:
+                        st.sidebar.error("PINs do not match.")
+                    else:
+                        pg_set_app_pin_hash(user_email, new_pin_1)
+                        st.sidebar.success("PIN saved. Please enter it to enable generation.")
+                        st.session_state["subscriber_pin_ok"] = False
+                        st.rerun()
+        
+                # Until a PIN exists, generation must be blocked
+                st.session_state["subscriber_pin_ok"] = False
+        
+            # PIN exists → require entry every session to generate
+            else:
+                entered_pin = st.sidebar.text_input("Enter PIN to enable generation", type="password", key="enter_pin").strip()
+        
+                ok = bool(entered_pin) and pg_check_app_pin(user_email, entered_pin)
+                st.session_state["subscriber_pin_ok"] = ok
+        
+                if not ok:
+                    st.sidebar.caption("Enter your PIN to enable generation.")
+
+
+
+            
             # --- Manage subscription link (subscribed users only) ---
             try:
                 resp = requests.get(
@@ -1568,50 +1609,7 @@ def main():
     
 
             # -------------------------
-            # -------------------------
-            # Subscriber PIN gate (REQUIRED for subscribers, admin bypass)
-            # -------------------------
             
-            # Default: if you're a subscriber and not admin, assume NOT OK until proven
-            if "subscriber_pin_ok" not in st.session_state:
-                st.session_state["subscriber_pin_ok"] = True
-            
-            if is_subscribed and email_ok and (not admin):
-                st.sidebar.markdown("### 🔐 Subscriber PIN (required)")
-            
-                current_pin_hash = pg_get_app_pin_hash(user_email)
-            
-                # If subscriber has never set a PIN yet
-                if not current_pin_hash:
-                    st.sidebar.info("Set a PIN to protect your account. You’ll use it each time you sign in.")
-            
-                    new_pin_1 = st.sidebar.text_input("Create PIN (4–8 digits)", type="password", key="set_pin_1").strip()
-                    new_pin_2 = st.sidebar.text_input("Confirm PIN", type="password", key="set_pin_2").strip()
-            
-                    if st.sidebar.button("Save PIN", key="save_pin"):
-                        if (not new_pin_1.isdigit()) or not (4 <= len(new_pin_1) <= 8):
-                            st.sidebar.error("PIN must be 4–8 digits.")
-                        elif new_pin_1 != new_pin_2:
-                            st.sidebar.error("PINs do not match.")
-                        else:
-                            pg_set_app_pin_hash(user_email, new_pin_1)
-                            st.sidebar.success("PIN saved. Please enter it to enable generation.")
-                            st.session_state["subscriber_pin_ok"] = False
-                            st.rerun()
-            
-                    # Until a PIN exists, generation must be blocked
-                    st.session_state["subscriber_pin_ok"] = False
-            
-                # PIN exists → require entry every session to generate
-                else:
-                    entered_pin = st.sidebar.text_input("Enter PIN to enable generation", type="password", key="enter_pin").strip()
-            
-                    ok = bool(entered_pin) and pg_check_app_pin(user_email, entered_pin)
-                    st.session_state["subscriber_pin_ok"] = ok
-            
-                    if not ok:
-                        st.sidebar.caption("Enter your PIN to enable generation.")
- 
     
             # Optional: Add credits button (depends on your billing backend)
             # If you already built a credits checkout endpoint, set it here:
