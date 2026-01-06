@@ -1816,17 +1816,19 @@ def main():
             )
 
             if notes_text.strip():
-                pdf_source = convert_contact_cycle_table_to_prose(notes_text)
-                pdf_bytes = create_pdf_from_text(pdf_source)
-            
-                st.download_button(
-                    label="📄 Download notes as PDF",
-                    data=pdf_bytes,
-                    file_name=f"{safe_name}_{timestamp}_notes.pdf",
-                    mime="application/pdf",
-                    key="dl_notes_pdf",
-                )
-
+                try:
+                    pdf_source = convert_contact_cycle_table_to_prose(notes_text)
+                    pdf_bytes = create_pdf_from_text(pdf_source)
+                    st.download_button(
+                        label="📄 Download notes as PDF",
+                        data=pdf_bytes,
+                        file_name=f"{safe_name}_{timestamp}_notes.pdf",
+                        mime="application/pdf",
+                        key="dl_notes_pdf",
+                    )
+                except Exception as e:
+                    st.warning("PDF export failed for this output. Please download .txt instead.")
+                    st.exception(e)
             else:
                 st.warning("No notes to export yet — generate notes first.")
 
@@ -1834,6 +1836,14 @@ def main():
             st.markdown("### 🧑🏼‍🦳 Therapist reflection / supervision view")
 
             if reflection_text.strip():
+                
+                try:
+                    reflection_pdf = create_pdf_from_text(reflection_text)
+                    st.download_button(...data=reflection_pdf...)
+                except Exception as e:
+                    st.warning("PDF export failed for reflection. Please download .txt instead.")
+                    st.exception(e)                
+                
                 st.markdown(
                     "For your eyes only – a supervision-style reflection on your process, "
                     "shame arcs, field dynamics, and possible Gestalt experiments."
