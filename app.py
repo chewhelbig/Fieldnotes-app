@@ -1390,31 +1390,31 @@ def main():
             key="verify_code_input",
         )
     
-    if st.sidebar.button("Verify email", key="btn_verify_email"):
-        ok, msg = pg_check_verification_code(user_email, entered_code)
-        if ok:
-            pg_mark_email_verified(user_email)
-    
-            granted = pg_grant_trial_credits_once(user_email, trial_credits=7)
-            if granted:
-                st.sidebar.success("Email verified — 7 free credits added 🎁")
-    
-                # ✅ ADD THIS (send onboarding email after trial activation)
-                try:
-                    subject, text = email_trial_verified_body()
-                    send_onboarding_email(user_email, subject=subject, text=text)
-                except Exception as e:
-                    # Don't break the app if email fails
-                    st.sidebar.caption("Note: welcome email could not be sent.")
-                    # optional for debugging:
-                    # st.sidebar.exception(e)
-    
+        if st.sidebar.button("Verify email", key="btn_verify_email"):
+            ok, msg = pg_check_verification_code(user_email, entered_code)
+            if ok:
+                pg_mark_email_verified(user_email)
+        
+                granted = pg_grant_trial_credits_once(user_email, trial_credits=7)
+                if granted:
+                    st.sidebar.success("Email verified — 7 free credits added 🎁")
+        
+                    # ✅ ADD THIS (send onboarding email after trial activation)
+                    try:
+                        subject, text = email_trial_verified_body()
+                        send_onboarding_email(user_email, subject=subject, text=text)
+                    except Exception as e:
+                        # Don't break the app if email fails
+                        st.sidebar.caption("Note: welcome email could not be sent.")
+                        # optional for debugging:
+                        # st.sidebar.exception(e)
+        
+                else:
+                    st.sidebar.success("Email verified.")
+        
+                st.rerun()
             else:
-                st.sidebar.success("Email verified.")
-    
-            st.rerun()
-        else:
-            st.sidebar.warning(msg)
+                st.sidebar.warning(msg)
 
 
     
@@ -1515,7 +1515,9 @@ def main():
                             st.sidebar.error("PIN must be 4–8 digits.")
                 else:
                     entered_pin = st.sidebar.text_input("Enter PIN to generate", type="password", key="enter_pin")
-                    subscriber_pin_ok = bool(entered_pin) and (entered_pin == current_pin)
+                    st.session_state["subscriber_pin_ok"] = bool(entered_pin) and (entered_pin == current_pin)
+                    subscriber_pin_ok = st.session_state["subscriber_pin_ok"]
+
                     if not subscriber_pin_ok:
                         st.sidebar.caption("Enter your PIN to enable generation.")
         
@@ -1861,14 +1863,7 @@ def main():
         with reflection_tab:
             st.markdown("### 🧑🏼‍🦳 Therapist reflection / supervision view")
 
-            if reflection_text.strip():
-                
-                try:
-                    reflection_pdf = create_pdf_from_text(reflection_text)
-                    st.download_button(...data=reflection_pdf...)
-                except Exception as e:
-                    st.warning("PDF export failed for reflection. Please download .txt instead.")
-                    st.exception(e)                
+            if reflection_text.strip():             
                 
                 st.markdown(
                     "For your eyes only – a supervision-style reflection on your process, "
