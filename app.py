@@ -1433,20 +1433,20 @@ def main():
                 # 1c trial user
                 st.sidebar.info(
                     f"You have **{credits_remaining}** credits remaining. "
-                    f"[**Subscribe here**]({subscribe_url}) for ongoing use (100 credits/month)."
+                    f"**Subscribe** for ongoing use (100 credits/month)."
                 )
             elif has_paid_history:
                 # 1e lapsed subscriber
                 st.sidebar.warning(
                     "Welcome back. Your subscription is not active. "
-                    f"[**Subscribe here**]({subscribe_url}) to return."
+                    f"**Subscribe** to return."
                 )
             else:
                 # 1f inactive
                 st.sidebar.info(
                     "Welcome.\n\n"
                     "To generate notes, please "
-                    f"[**subscribe here**]({subscribe_url}) "
+                    f"**subscribe** "
                     "or request a "
                     f"[**free trial of 7 credits here**]({trial_request_url})."
                 )
