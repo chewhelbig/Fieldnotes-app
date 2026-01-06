@@ -1258,7 +1258,37 @@ def main():
     subscription_status = ""
     existing_user = None
     
-    admin = is_admin(user_email) if email_ok else False
+    # --- Admin access (email allowlist + admin code) ---
+    ADMIN_EMAILS = set(
+        e.strip().lower()
+        for e in os.getenv("FIELDNOTES_ADMIN_EMAILS", "").split(",")
+        if e.strip()
+    )
+    ADMIN_CODE = os.getenv("FIELDNOTES_ADMIN_CODE", "").strip()
+    
+    # Session flag: becomes True only after correct admin code
+    if "admin_ok" not in st.session_state:
+        st.session_state["admin_ok"] = False
+    
+    # If email is not an admin email, force admin_ok off
+    if (not email_ok) or (user_email not in ADMIN_EMAILS):
+        st.session_state["admin_ok"] = False
+    
+    # If this is an admin email, show admin code box (only then)
+    if email_ok and (user_email in ADMIN_EMAILS) and ADMIN_CODE:
+        st.sidebar.markdown("### 🛡️ Admin")
+        entered = st.sidebar.text_input(
+            "Admin code",
+            type="password",
+            key="admin_code_input",
+        ).strip()
+        if entered == ADMIN_CODE:
+            st.session_state["admin_ok"] = True
+        elif entered:
+            st.sidebar.error("Incorrect admin code.")
+    
+    admin = bool(email_ok and (user_email in ADMIN_EMAILS) and st.session_state["admin_ok"])
+
     
     # 0) Opening app (no email)
     if not email_ok:
