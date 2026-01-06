@@ -9,13 +9,16 @@ import streamlit.components.v1 as components
 import requests
 from datetime import date
 import psycopg2
-
+import hashlib
+import time
 import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
 
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
+
+
 
 # ====== database ===========
 def get_pg_conn():
@@ -309,6 +312,10 @@ def pg_set_app_pin(email: str, pin: str) -> None:
         cur.close()
     finally:
         conn.close()
+
+# --- Prevent double-click spending (UI lock) ---
+if "is_generating" not in st.session_state:
+    st.session_state["is_generating"] = False
 
 
 # ===== credit ============
@@ -1698,8 +1705,8 @@ def main():
 
     
     # ===== Generate button (main area) =====
-    if st.button("Generate structured output", disabled=not can_generate):
-    
+    if st.button("Generate structured output", disabled=(not can_generate) or st.session_state["is_generating"]):
+
         # Default: do not generate unless all checks pass
         generate_now = False
     
@@ -1716,16 +1723,35 @@ def main():
     
         if generate_now:
             combined_narrative = narrative
-    
+        
             # Enforce subscriber PIN only for active/trialing subscribers (non-admin)
             if is_subscribed and (not admin) and (not subscriber_pin_ok):
                 st.warning("Please enter your Subscriber PIN in the sidebar to generate.")
                 st.stop()
-           
+        
+            # ----- Idempotency guard (prevent double-click / rerun spend) -----
+            request_payload = f"{user_email}|{client_name}|{output_mode}|{combined_narrative}"
+            request_hash = hashlib.sha256(request_payload.encode("utf-8")).hexdigest()
+        
+            now = time.time()
+            last_hash = st.session_state.get("last_request_hash")
+            last_time = st.session_state.get("last_request_time", 0)
+        
+            if last_hash == request_hash and (now - last_time) < 15:
+                st.warning("That request was just submitted. Please wait a moment.")
+                st.stop()
+        
+            # Record immediately so fast double-clicks are caught
+            st.session_state["last_request_hash"] = request_hash
+            st.session_state["last_request_time"] = now
+        
             # Clear old notes immediately to avoid stale display on reruns
             st.session_state["notes_text"] = ""
-
-            # 1) NOTES — call OpenAI first; deduct ONLY after success
+        
+            # Lock UI to prevent double-click
+            st.session_state["is_generating"] = True
+        
+            # ----- NOTES: single OpenAI call -----
             try:
                 with st.spinner("Generating clinical notes..."):
                     notes_text = call_openai(
@@ -1736,48 +1762,48 @@ def main():
             except Exception as e:
                 st.error("OpenAI request failed. No credits were used.")
                 st.exception(e)
-                notes_text = ""
                 st.stop()
-
-            if notes_text:
-                # Deduct ONLY after success
+            finally:
+                # Always unlock UI
+                st.session_state["is_generating"] = False
+        
+            # Deduct ONLY after success
+            if not admin:
+                if not pg_try_deduct_credits(user_email, COST_GENERATE_NOTES):
+                    st.warning("Not enough credits to save this generation. Please top up and try again.")
+                    st.stop()
+        
+            # Save output
+            st.session_state["notes_text"] = notes_text
+            st.session_state["gen_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M")
+        
+            # ----- REFLECTION (optional) -----
+            if generate_reflection:
+                st.session_state["reflection_text"] = ""
+        
+                cost = REFLECTION_COST.get(reflection_intensity, 2)
+        
+                try:
+                    with st.spinner("Generating therapist reflection / supervision view..."):
+                        reflection = call_reflection_engine(
+                            narrative=combined_narrative,
+                            ai_output=notes_text,
+                            client_name=client_name,
+                            intensity=reflection_intensity,
+                        )
+                except Exception as e:
+                    st.error("Reflection generation failed. No credits were used.")
+                    st.exception(e)
+                    st.stop()
+        
                 if not admin:
-                    if not pg_try_deduct_credits(user_email, COST_GENERATE_NOTES):
-                        st.warning("Not enough credits to save this generation. Please top up and try again.")
+                    if not pg_try_deduct_credits(user_email, cost):
+                        st.warning("Not enough credits to save this reflection.")
                         st.stop()
-                # Save output (admin OR successful deduction)
-                st.session_state["notes_text"] = notes_text
-                st.session_state["gen_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M")
-
-                # 2) REFLECTION (optional)
-                if generate_reflection:
-                    # Clear old reflection immediately to avoid stale display on reruns
-                    st.session_state["reflection_text"] = ""
-                    
-                    cost = REFLECTION_COST.get(reflection_intensity, 2)
-    
-                    try:
-                        with st.spinner("Generating therapist reflection / supervision view..."):
-                            reflection = call_reflection_engine(
-                                narrative=combined_narrative,
-                                ai_output=notes_text,
-                                client_name=client_name,
-                                intensity=reflection_intensity,
-                            )
-                    except Exception as e:
-                        st.error("Reflection generation failed. No credits were used.")
-                        st.exception(e)
-                        reflection = ""
-    
-                    if reflection:
-                        if not admin:
-                            if not pg_try_deduct_credits(user_email, cost):
-                                st.warning("Not enough credits to save this reflection.")
-                                st.stop()
-                        st.session_state["reflection_text"] = reflection
-                    else:
-                        st.session_state["reflection_text"] = ""
-
+        
+                st.session_state["reflection_text"] = reflection
+            else:
+                st.session_state["reflection_text"] = ""
 
 
     # ALWAYS read from session_state (survives reruns + downloads)
