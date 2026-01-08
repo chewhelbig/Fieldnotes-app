@@ -1544,6 +1544,20 @@ def main():
         else:
             st.sidebar.success("Subscription: active")
             st.session_state.pop("checkout_url", None)
+            # --- Manage subscription link (subscribed users only) ---
+            try:
+                resp = requests.get(
+                    f"{BILLING_API_URL}/billing-portal-link",
+                    params={"email": user_email},
+                    timeout=5,
+                )
+                resp.raise_for_status()
+                portal_url = resp.json().get("url")
+            
+                if portal_url:
+                    st.sidebar.markdown(f"[Manage subscription]({portal_url})")
+            except Exception:
+                pass
 
         # -------------------------
         # Subscriber PIN gate (REQUIRED for subscribers, admin bypass)
