@@ -71,40 +71,56 @@ TRIAL_INVITE_CODE = os.environ.get("TRIAL_INVITE_CODE", "").strip()
 DEFAULT_MONTHLY_ALLOWANCE = 100
 TRIAL_CREDITS = 7  # put this near your other constants
 
-def pg_get_or_create_user(email: str, grant_trial: bool = False):
-    """
-    Drop-in replacement (safer):
-    - If user exists: returns the user row, created=False
-    - If user does not exist:
-        - grant_trial=False -> creates user with 0 credits (safe default)
-        - grant_trial=True  -> creates user with TRIAL_CREDITS
-    Returns: (row, created)
-    Row shape matches: (email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status)
-    """
-    email = (email or "").strip().lower()
-    if not email:
-        return None, False
-
+def pg_get_or_create_user(email: str):
     conn = get_pg_conn()
     if conn is None:
-        return None, False
+        return None
 
-    try:
-        cur = conn.cursor()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT
+            email,
+            plan,
+            credits_remaining,
+            monthly_allowance,
+            subscription_status,
+            last_reset
+        FROM users
+        WHERE email = %s
+        """,
+        (email,),
+    )
+    row = cur.fetchone()
 
-        # 1) Try fetch
+    if row is None:
+        cur.execute(
+            "INSERT INTO users (email) VALUES (%s)",
+            (email,),
+        )
+        conn.commit()
+
         cur.execute(
             """
-            SELECT email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status
+            SELECT
+                email,
+                plan,
+                credits_remaining,
+                monthly_allowance,
+                subscription_status,
+                last_reset
             FROM users
             WHERE email = %s
             """,
             (email,),
         )
         row = cur.fetchone()
-        if row:
-            cur.close()
-            return row, False
+
+    cur.close()
+    conn.close()
+
+    return row
+
 
         # 2) Not found -> insert with safe default credits
         starting_credits = TRIAL_CREDITS if grant_trial else 0
