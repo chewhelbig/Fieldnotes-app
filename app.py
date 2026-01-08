@@ -71,67 +71,46 @@ TRIAL_INVITE_CODE = os.environ.get("TRIAL_INVITE_CODE", "").strip()
 DEFAULT_MONTHLY_ALLOWANCE = 100
 TRIAL_CREDITS = 7  # put this near your other constants
 
-def pg_get_or_create_user(email: str):
+def pg_get_or_create_user(email: str, grant_trial: bool = False):
+    """
+    Returns: (row, created)
+    Row shape: (email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status)
+    """
+    email = (email or "").strip().lower()
+    if not email:
+        return None, False
+
     conn = get_pg_conn()
     if conn is None:
-        return None
+        return None, False
 
-    cur = conn.cursor()
-    cur.execute(
-        """
-        SELECT
-            email,
-            plan,
-            credits_remaining,
-            monthly_allowance,
-            subscription_status,
-            last_reset
-        FROM users
-        WHERE email = %s
-        """,
-        (email,),
-    )
-    row = cur.fetchone()
+    try:
+        cur = conn.cursor()
 
-    if row is None:
-        cur.execute(
-            "INSERT INTO users (email) VALUES (%s)",
-            (email,),
-        )
-        conn.commit()
-
+        # 1) Try fetch
         cur.execute(
             """
-            SELECT
-                email,
-                plan,
-                credits_remaining,
-                monthly_allowance,
-                subscription_status,
-                last_reset
+            SELECT email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status
             FROM users
             WHERE email = %s
             """,
             (email,),
         )
         row = cur.fetchone()
-
-    cur.close()
-    conn.close()
-
-    return row
-
+        if row:
+            cur.close()
+            return row, False
 
         # 2) Not found -> insert with safe default credits
         starting_credits = TRIAL_CREDITS if grant_trial else 0
-        plan = "free"  # keep 'free' unless you explicitly set 'pro' elsewhere
-        
+        plan = "free"
+
         cur.execute(
             """
             INSERT INTO users (
                 email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status
             )
-            VALUES (%s, %s, %s, 0, CURRENT_DATE, 'free')
+            VALUES (%s, %s, %s, 0, CURRENT_DATE, 'none')
             ON CONFLICT (email) DO NOTHING
             RETURNING email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status
             """,
@@ -139,11 +118,11 @@ def pg_get_or_create_user(email: str):
         )
         inserted = cur.fetchone()
         conn.commit()
-        
+
         if inserted:
             cur.close()
-            return inserted, True  # ✅ truly created
-        
+            return inserted, True  # truly created
+
         # If we didn't insert (conflict), fetch and return created=False
         cur.execute(
             """
@@ -157,22 +136,9 @@ def pg_get_or_create_user(email: str):
         cur.close()
         return row, False
 
-
-        # 3) Fetch again
-        cur.execute(
-            """
-            SELECT email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status
-            FROM users
-            WHERE email = %s
-            """,
-            (email,),
-        )
-        row = cur.fetchone()
-        cur.close()
-        return row, True
-
     finally:
         conn.close()
+
 
 def pg_grant_trial_credits_once(email: str, trial_credits: int = 7) -> bool:
     """
