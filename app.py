@@ -140,37 +140,36 @@ def pg_get_or_create_user(email: str, grant_trial: bool = False):
         conn.close()
 
 
-def pg_grant_trial_credits_once(email: str, trial_credits: int = 7) -> bool:
-    """
-    Grants trial credits only if:
-    - email is verified
-    - user currently has 0 credits AND plan is 'free'
-    Returns True if granted, False otherwise.
-    """
+def pg_grant_trial_credits_once(email: str) -> bool:
+    email = (email or "").strip().lower()
+    if not email:
+        return False
+
     conn = get_pg_conn()
     if conn is None:
         return False
+
     try:
         cur = conn.cursor()
+
+        # Only grant once
         cur.execute(
             """
             UPDATE users
             SET
-                credits_remaining = %s,
-                monthly_allowance = %s,
+                credits_remaining = GREATEST(credits_remaining, %s),
                 trial_credits_granted_at = NOW()
             WHERE email = %s
-              AND email_verified_at IS NOT NULL
-              AND credits_remaining = 0
-              AND plan = 'free'
+              AND trial_credits_granted_at IS NULL
             """,
-            (trial_credits, trial_credits, email),
+            (TRIAL_CREDITS, email),
         )
 
-        updated = cur.rowcount
+        changed = cur.rowcount > 0
         conn.commit()
         cur.close()
-        return updated == 1
+        return changed
+
     finally:
         conn.close()
 
