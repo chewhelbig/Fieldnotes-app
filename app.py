@@ -1246,21 +1246,6 @@ def main():
     
     email_ok = bool(user_email)
 
-    ADMIN_EMAILS = set(e.strip().lower() for e in os.getenv("FIELDNOTES_ADMIN_EMAILS","").split(",") if e.strip())
-    ADMIN_CODE = os.getenv("FIELDNOTES_ADMIN_CODE","").strip()
-    
-    admin = False
-    if email_ok and user_email in ADMIN_EMAILS:
-        if not ADMIN_CODE:
-            # If you forget to set the env var, fail closed (no admin)
-            admin = False
-        else:
-            st.sidebar.markdown("### 🛡️ Admin")
-            entered = st.sidebar.text_input("Admin code", type="password", key="admin_code").strip()
-            if entered == ADMIN_CODE:
-                admin = True
-            else:
-                st.sidebar.caption("Enter admin code to enable admin features.")
 
 
     
@@ -1380,23 +1365,7 @@ def main():
             subscription_status = (pg_user[5] or "").lower()
     
         is_subscribed = subscription_status in ("active", "trialing")
-        # -------------------------
-        # Subscriber PIN gate (for subscribers only; UI still shows)
-        # -------------------------
-        SUBSCRIBER_PIN = os.getenv("SUBSCRIBER_PIN", "").strip()
-        
-        subscriber_pin_ok = True  # default for non-subscribers / admin
-        if (not admin) and is_subscribed and SUBSCRIBER_PIN:
-            st.sidebar.markdown("### 🔒 Subscriber PIN")
-            pin_entered = st.sidebar.text_input(
-                "Enter your subscriber PIN",
-                type="password",
-                key="subscriber_pin_input",
-            ).strip()
-        
-            if pin_entered != SUBSCRIBER_PIN:
-                subscriber_pin_ok = False
-                st.sidebar.caption("Enter the PIN to enable generation.")
+       
 
         # -------------------------
         # 2) Admin view (always)
@@ -1584,44 +1553,10 @@ def main():
         
                 if not ok:
                     st.sidebar.caption("Enter your PIN to enable generation.")
-
-
-
-            
-            # --- Manage subscription link (subscribed users only) ---
-            try:
-                resp = requests.get(
-                    f"{BILLING_API_URL}/billing-portal-link",
-                    params={"email": user_email},
-                    timeout=5,
-                )
-                resp.raise_for_status()
-                portal_url = resp.json().get("url")
-    
-                if portal_url:
-                    st.sidebar.markdown(f"[Manage subscription]({portal_url})")
-            except Exception:
-                pass
     
 
-            # -------------------------
-            
     
-            # Optional: Add credits button (depends on your billing backend)
-            # If you already built a credits checkout endpoint, set it here:
-            if st.sidebar.button("Add credits", key="btn_add_credits"):
-                try:
-                    r = requests.post(
-                        f"{BILLING_API_URL}/create-credits-checkout-session",
-                        json={"email": user_email},
-                        timeout=30,
-                    )
-                    r.raise_for_status()
-                    st.sidebar.link_button("Open credits checkout", r.json()["url"])
-                except Exception:
-                    st.sidebar.info("Credits top-up endpoint not configured yet.")
-    
-
+         
     
     st.sidebar.markdown("---")
     
