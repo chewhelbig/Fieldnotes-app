@@ -1794,7 +1794,7 @@ def main():
 
 
     
-    # If you implemented subscriber PIN UI, it should set subscriber_pin_ok accordingly.
+  # If you implemented subscriber PIN UI, it should set subscriber_pin_ok accordingly.
     # But even if not, the default above prevents NameError.
     
     can_generate = access_ok and subscriber_pin_ok and (
@@ -1818,7 +1818,8 @@ def main():
 
     
     # ===== Generate button (main area) =====
-    if st.button("Generate structured output", disabled=(not can_generate) or st.session_state["is_generating"]):
+    if st.button("Generate structured output", disabled=(not can_generate) or st.session_state.get("is_generating", False)
+):
 
         # Default: do not generate unless all checks pass
         generate_now = False
@@ -1889,6 +1890,7 @@ def main():
             # Save output
             st.session_state["notes_text"] = notes_text
             st.session_state["gen_timestamp"] = datetime.now().strftime("%Y-%m-%d_%H-%M")
+        
         
             # ----- REFLECTION (optional) -----
             if generate_reflection:
