@@ -1815,11 +1815,10 @@ def main():
         st.warning("No credits remaining. Please subscribe to continue.")
     
    
+    subscriber_pin_ok = st.session_state.get("subscriber_pin_ok", True)
 
-    
     # ===== Generate button (main area) =====
-    if st.button("Generate structured output", disabled=(not can_generate) or st.session_state.get("is_generating", False)
-):
+    if st.button("Generate structured output", disabled=(not can_generate) or st.session_state.get("is_generating", False)):
 
         # Default: do not generate unless all checks pass
         generate_now = False
@@ -1827,7 +1826,8 @@ def main():
         if not email_ok:
             st.warning("Please enter your email in the sidebar to continue.")
         elif not access_ok:
-            st.warning("Trial access is locked. Enter the access password in the sidebar, or subscribe.")
+            st.warning("Access is locked. Enter a valid trial access code (invite-only) or subscribe.")
+
         elif (not is_subscribed) and credits_remaining <= 0:
             st.warning("Free trial ended. Please subscribe (USD 29/month) or add credits to continue.")
         elif not narrative.strip():
