@@ -53,7 +53,6 @@ def ensure_pg_schema():
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_code_hash TEXT;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_expires_at TIMESTAMPTZ;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_attempts INT NOT NULL DEFAULT 0;")
-        cur.execute("UPDATE users SET email_verify_attempts = 0 WHERE email_verify_attempts IS NULL;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_credits_granted_at TIMESTAMPTZ;")
 
         # Subscriber PIN (safe to run repeatedly)
@@ -71,7 +70,7 @@ TRIAL_INVITE_CODE = os.environ.get("TRIAL_INVITE_CODE", "").strip()
 DEFAULT_MONTHLY_ALLOWANCE = 100
 TRIAL_CREDITS = 7  # put this near your other constants
 
-def pg_get_or_create_user(email: str, grant_trial: bool = False):
+def pg_get_or_create_user(email: str):
     """
     Returns: (row, created)
     Row shape: (email, plan, credits_remaining, monthly_allowance, last_reset, subscription_status)
@@ -102,7 +101,7 @@ def pg_get_or_create_user(email: str, grant_trial: bool = False):
             return row, False
 
         # 2) Not found -> insert with safe default credits
-        starting_credits = TRIAL_CREDITS if grant_trial else 0
+        starting_credits = 0
         plan = "free"
 
         cur.execute(
@@ -140,14 +139,14 @@ def pg_get_or_create_user(email: str, grant_trial: bool = False):
         conn.close()
 
 
+
 def pg_grant_trial_credits_once(email: str) -> bool:
     email = (email or "").strip().lower()
     if not email:
         return False
 
-    conn = get_pg_conn()
-    if conn is None:
-        return False
+    # ✅ Ensure the user row exists before updating
+    pg_get_or_create_user(email)
 
     try:
         cur = conn.cursor()
@@ -177,6 +176,8 @@ def pg_grant_trial_credits_once(email: str) -> bool:
 
 def pg_maybe_reset_monthly(email: str):
     conn = get_pg_conn()
+    if conn is None:
+        return
     cur = conn.cursor()
 
     cur.execute(
