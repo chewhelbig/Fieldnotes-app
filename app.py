@@ -149,6 +149,11 @@ def pg_grant_trial_credits_once(email: str) -> bool:
     pg_get_or_create_user(email)
 
     try:
+        
+        conn = get_pg_conn()
+        if conn is None:
+            return False
+        
         cur = conn.cursor()
 
         # Only grant once
