@@ -218,6 +218,30 @@ def pg_maybe_reset_monthly(email: str):
     cur.close()
     conn.close()
 
+def pg_reset_app_pin(email: str) -> bool:
+    email = (email or "").strip().lower()
+    if not email:
+        return False
+
+    conn = get_pg_conn()
+    if conn is None:
+        return False
+
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE users SET app_pin = NULL WHERE email = %s",
+            (email,),
+        )
+        conn.commit()
+        changed = cur.rowcount > 0
+        cur.close()
+        return changed
+    finally:
+        conn.close()
+
+
+
 # --- Admin access (Stage 2) ---
 def get_admin_emails() -> set[str]:
     """
@@ -1280,7 +1304,7 @@ def main():
     if (not email_ok) or (user_email not in ADMIN_EMAILS):
         st.session_state["admin_ok"] = False
     
-    # If this is an admin email, show admin code box (only then)
+    # If this is an admin email, show admin code box
     if email_ok and (user_email in ADMIN_EMAILS) and ADMIN_CODE:
         st.sidebar.markdown("### 🛡️ Admin")
         entered = st.sidebar.text_input(
@@ -1288,10 +1312,31 @@ def main():
             type="password",
             key="admin_code_input",
         ).strip()
+    
         if entered == ADMIN_CODE:
             st.session_state["admin_ok"] = True
         elif entered:
             st.sidebar.error("Incorrect admin code.")
+    
+    # Final admin boolean
+    admin = bool(email_ok and (user_email in ADMIN_EMAILS) and st.session_state["admin_ok"])
+    
+    # ✅ Admin tools ONLY if admin is True
+    if admin:
+        st.sidebar.markdown("### 🔧 Admin tools")
+    
+        reset_email = st.sidebar.text_input(
+            "Reset subscriber PIN for email",
+            key="reset_pin_email",
+        ).strip().lower()
+    
+        if st.sidebar.button("Reset subscriber PIN"):
+            if pg_reset_app_pin(reset_email):
+                st.sidebar.success("PIN reset. User will be asked to set a new PIN.")
+            else:
+                st.sidebar.warning("No user found with that email.")
+
+
     
     admin = bool(email_ok and (user_email in ADMIN_EMAILS) and st.session_state["admin_ok"])
 
@@ -1547,10 +1592,9 @@ def main():
             # PIN exists → require entry every session to generate
             else:
                 entered_pin = st.sidebar.text_input("Enter PIN to enable generation", type="password", key="enter_pin").strip()
-        
                 ok = bool(entered_pin) and pg_check_app_pin(user_email, entered_pin)
                 st.session_state["subscriber_pin_ok"] = ok
-        
+                st.sidebar.caption("Forgot your PIN? Contact support to reset it.")
                 if not ok:
                     st.sidebar.caption("Enter your PIN to enable generation.")
     
