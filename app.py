@@ -1288,6 +1288,7 @@ def main():
     subscription_status = ""
     existing_user = None
     
+   
     # --- Admin access (email allowlist + admin code) ---
     ADMIN_EMAILS = set(
         e.strip().lower()
@@ -1296,30 +1297,41 @@ def main():
     )
     ADMIN_CODE = os.getenv("FIELDNOTES_ADMIN_CODE", "").strip()
     
-    # Session flag: becomes True only after correct admin code
     if "admin_ok" not in st.session_state:
         st.session_state["admin_ok"] = False
     
-    # If email is not an admin email, force admin_ok off
+    # Default: NOT admin
+    admin = False
+    
+    # Only admin emails can even try
+    if email_ok and (user_email in ADMIN_EMAILS):
+        st.sidebar.markdown("### 🛡️ Admin")
+    
+        if not ADMIN_CODE:
+            st.sidebar.error("Admin access disabled: admin code not configured.")
+            st.session_state["admin_ok"] = False
+        else:
+            entered = st.sidebar.text_input(
+                "Admin code",
+                type="password",
+                key="admin_code_input",
+            ).strip()
+    
+            if entered == ADMIN_CODE:
+                st.session_state["admin_ok"] = True
+            elif entered:
+                st.sidebar.error("Incorrect admin code.")
+    
+        admin = bool(st.session_state["admin_ok"])
+    
+    # If email changes away from admin email, force admin off
     if (not email_ok) or (user_email not in ADMIN_EMAILS):
         st.session_state["admin_ok"] = False
+        admin = False
+
+
+
     
-    # If this is an admin email, show admin code box
-    if email_ok and (user_email in ADMIN_EMAILS) and ADMIN_CODE:
-        st.sidebar.markdown("### 🛡️ Admin")
-        entered = st.sidebar.text_input(
-            "Admin code",
-            type="password",
-            key="admin_code_input",
-        ).strip()
-    
-        if entered == ADMIN_CODE:
-            st.session_state["admin_ok"] = True
-        elif entered:
-            st.sidebar.error("Incorrect admin code.")
-    
-    # Final admin boolean
-    admin = bool(email_ok and (user_email in ADMIN_EMAILS) and st.session_state["admin_ok"])
     
     # ✅ Admin tools ONLY if admin is True
     if admin:
