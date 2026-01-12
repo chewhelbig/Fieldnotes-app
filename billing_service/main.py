@@ -5,8 +5,6 @@ import psycopg2
 import stripe
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
 import logging
 
 
@@ -55,6 +53,46 @@ def upsert_user(email: str):
     cur.close()
     conn.close()
     return email
+
+
+def ensure_users_schema_minimal():
+    conn = get_conn()
+    cur = conn.cursor()
+    try:
+        # Ensure base table exists
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+              email TEXT PRIMARY KEY,
+              plan TEXT DEFAULT 'free',
+              credits_remaining INT DEFAULT 0,
+              monthly_allowance INT DEFAULT 0,
+              last_reset DATE,
+              stripe_customer_id TEXT,
+              stripe_subscription_id TEXT,
+              subscription_status TEXT,
+              current_period_end TIMESTAMPTZ,
+              created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+        # Ensure the column your email logic depends on exists
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_credits_granted_at TIMESTAMPTZ;")
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
+# --- Optional SendGrid dependency (do not crash app if missing) ---
+SENDGRID_AVAILABLE = True
+try:
+    from sendgrid import SendGridAPIClient
+    from sendgrid.helpers.mail import Mail
+except Exception:
+    SENDGRID_AVAILABLE = False
+    SendGridAPIClient = None
+    Mail = None
+
+
 # === send onboarding email ======
 def send_onboarding_email(to_email: str, subject: str, text: str, html: str | None = None):
     # Graceful fallback: do nothing if SendGrid isn't available (but log once)
@@ -134,16 +172,6 @@ Nicole Chew-Helbig
 
     return subject, text
 
-
-# --- Optional SendGrid dependency (do not crash app if missing) ---
-SENDGRID_AVAILABLE = True
-try:
-    from sendgrid import SendGridAPIClient
-    from sendgrid.helpers.mail import Mail
-except Exception:
-    SENDGRID_AVAILABLE = False
-    SendGridAPIClient = None
-    Mail = None
 
 # === grant monthly credits ==========
 def grant_pro_monthly_credits(email: str):
@@ -363,20 +391,47 @@ async def webhook(request: Request):
         if email:
             upsert_user(email)
     
-            # ✅ ADD THIS BLOCK HERE
             customer_id = session.get("customer")
-            if customer_id:
-                conn = get_conn()
-                cur = conn.cursor()
-                cur.execute(
-                    "UPDATE users SET stripe_customer_id=%s WHERE email=%s",
-                    (customer_id, email),
-                )
-                conn.commit()
-                cur.close()
-                conn.close()
+            sub_id = session.get("subscription")  # optional
+    
+            if customer_id or sub_id:
+                try:
+                    conn = get_conn()
+                    cur = conn.cursor()
+                    if customer_id and sub_id:
+                        cur.execute(
+                            "UPDATE users SET stripe_customer_id=%s, stripe_subscription_id=%s WHERE email=%s",
+                            (customer_id, sub_id, email),
+                        )
+                    elif customer_id:
+                        cur.execute(
+                            "UPDATE users SET stripe_customer_id=%s WHERE email=%s",
+                            (customer_id, email),
+                        )
+                    else:
+                        cur.execute(
+                            "UPDATE users SET stripe_subscription_id=%s WHERE email=%s",
+                            (sub_id, email),
+                        )
+                    conn.commit()
+                    cur.close()
+                finally:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
     
             grant_pro_monthly_credits(email)
+    
+            # optional: set Stripe Customer metadata
+            if customer_id:
+                try:
+                    stripe.Customer.modify(customer_id, metadata={"email": email})
+                except Exception as e:
+                    logger.warning("Could not set Stripe customer metadata: %s", e)
+
+    
+           
 
             
 
