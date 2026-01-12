@@ -1598,7 +1598,10 @@ def main():
                 entered_pin = st.sidebar.text_input("Enter PIN to enable generation", type="password", key="enter_pin").strip()
                 ok = bool(entered_pin) and pg_check_app_pin(user_email, entered_pin)
                 st.session_state["subscriber_pin_ok"] = ok
-                st.sidebar.caption("Forgot your PIN? Contact support to reset it.")
+                st.sidebar.caption(
+                    "Forgot your PIN? "
+                    "[Contact support](https://psychotherapist.sg/fieldnotes-contact-form) to reset it."
+                )
                 if not ok:
                     st.sidebar.caption("Enter your PIN to enable generation.")
     
