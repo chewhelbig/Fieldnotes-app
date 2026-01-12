@@ -1600,7 +1600,7 @@ def main():
                 st.session_state["subscriber_pin_ok"] = ok
                 st.sidebar.caption(
                     "Forgot your PIN? "
-                    "[Contact support](https://psychotherapist.sg/fieldnotes-contact-form) to reset it."
+                    "[Contact support](https://psychotherapist.sg/fieldnotes-pin-reset) to reset it."
                 )
                 if not ok:
                     st.sidebar.caption("Enter your PIN to enable generation.")
