@@ -1888,7 +1888,7 @@ def main():
             st.warning("Access is locked. Enter a valid trial access code (invite-only) or subscribe.")
 
         elif (not is_subscribed) and credits_remaining <= 0:
-            st.warning("Free trial ended. Please subscribe (USD 29/month) or add credits to continue.")
+            st.warning("Free trial ended. Please subscribe (USD 29/month).")
         elif not narrative.strip():
             st.warning("Please enter a session narrative first.")
         else:
@@ -1943,7 +1943,7 @@ def main():
             # Deduct ONLY after success
             if not admin:
                 if not pg_try_deduct_credits(user_email, COST_GENERATE_NOTES):
-                    st.warning("Not enough credits to save this generation. Please top up and try again.")
+                    st.warning("Not enough credits to save this generation. Please subscribe.")
                     st.stop()
         
             # Save output
