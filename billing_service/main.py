@@ -6,6 +6,7 @@ import stripe
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 import logging
+from psycopg2 import errors as pg_errors
 
 
 app = FastAPI()
@@ -81,6 +82,13 @@ def ensure_users_schema_minimal():
         cur.close()
         conn.close()
 
+def ensure_billing_schema():
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_credits_granted_at TIMESTAMPTZ;")
+    conn.commit()
+    cur.close()
+    conn.close()
 
 # --- Optional SendGrid dependency (do not crash app if missing) ---
 SENDGRID_AVAILABLE = True
@@ -363,7 +371,6 @@ def get_billing_portal_link(email: str):
     finally:
         conn.close()
 
-
 @app.post("/webhook")
 async def webhook(request: Request):
     payload = await request.body()
@@ -378,26 +385,33 @@ async def webhook(request: Request):
 
     etype = event["type"]
     obj = event["data"]["object"]
-    
+
+    # ------------------------------------------------------------
+    # 1) Subscription started (Checkout)
+    # ------------------------------------------------------------
     if etype == "checkout.session.completed":
         session = obj
-    
+
         email = (
             (session.get("customer_details") or {}).get("email")
             or session.get("customer_email")
             or ""
         ).strip().lower()
-    
+
         if email:
             upsert_user(email)
-    
+
             customer_id = session.get("customer")
-            sub_id = session.get("subscription")  # optional
-    
+            sub_id = session.get("subscription")  # may exist for subscription checkout
+
+            # Save Stripe IDs (best-effort)
             if customer_id or sub_id:
+                conn = None
+                cur = None
                 try:
                     conn = get_conn()
                     cur = conn.cursor()
+
                     if customer_id and sub_id:
                         cur.execute(
                             "UPDATE users SET stripe_customer_id=%s, stripe_subscription_id=%s WHERE email=%s",
@@ -413,110 +427,115 @@ async def webhook(request: Request):
                             "UPDATE users SET stripe_subscription_id=%s WHERE email=%s",
                             (sub_id, email),
                         )
+
                     conn.commit()
-                    cur.close()
+                except Exception:
+                    pass
                 finally:
-                    try:
-                        conn.close()
-                    except Exception:
-                        pass
-    
+                    if cur:
+                        try:
+                            cur.close()
+                        except Exception:
+                            pass
+                    if conn:
+                        try:
+                            conn.close()
+                        except Exception:
+                            pass
+
+            # ✅ Start subscription credits: set to 100 (no rollover)
             grant_pro_monthly_credits(email)
-    
-            # optional: set Stripe Customer metadata
+
+            # Optional: write email into Stripe Customer metadata
             if customer_id:
                 try:
                     stripe.Customer.modify(customer_id, metadata={"email": email})
                 except Exception as e:
                     logger.warning("Could not set Stripe customer metadata: %s", e)
 
-    
-           
-
-            
-
-            # --- Send subscription onboarding email ---
+            # Send onboarding email (best-effort)
+            conn = None
+            cur = None
             try:
                 conn = get_conn()
                 cur = conn.cursor()
-                cur.execute(
-                    """
-                    SELECT trial_credits_granted_at, stripe_customer_id
-                    FROM users
-                    WHERE email = %s
-                    """,
-                    (email,),
-                )
 
-                row = cur.fetchone()
-                was_trial_user = bool(row and row[0])
-                stripe_customer_id = row[1] if row else None
+                was_trial_user = False
+                stripe_customer_id = customer_id
+
+                try:
+                    cur.execute(
+                        """
+                        SELECT trial_credits_granted_at, stripe_customer_id
+                        FROM users
+                        WHERE email = %s
+                        """,
+                        (email,),
+                    )
+                    row = cur.fetchone()
+                    was_trial_user = bool(row and row[0])
+                    stripe_customer_id = (row[1] if row else None) or stripe_customer_id
+
+                except pg_errors.UndefinedColumn:
+                    cur.execute(
+                        "SELECT stripe_customer_id FROM users WHERE email=%s",
+                        (email,),
+                    )
+                    row = cur.fetchone()
+                    stripe_customer_id = (row[0] if row else None) or stripe_customer_id
+                    was_trial_user = False
+
                 portal_link = create_billing_portal_link(stripe_customer_id)
-
-            
                 subject, text = email_subscription_started_body(
                     trial_user=was_trial_user,
                     portal_link=portal_link,
                 )
-
                 send_onboarding_email(email, subject=subject, text=text)
-            
+
             except Exception:
-                # Never break webhook delivery because of email issues
                 pass
-            
             finally:
-                try:
-                    cur.close()
-                    conn.close()
-                except Exception:
-                    pass
- 
-    
+                if cur:
+                    try:
+                        cur.close()
+                    except Exception:
+                        pass
+                if conn:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+
         return JSONResponse({"received": True})
 
-
+    # ------------------------------------------------------------
+    # 2) Subscription status updates (record only, do NOT reset credits)
+    # ------------------------------------------------------------
     if etype.startswith("customer.subscription."):
         email = ((obj.get("metadata") or {}).get("email") or "").strip().lower()
         if email:
             update_user_subscription(email, obj)
-    
-            status = (obj.get("status") or "").lower()
-            # ✅ When subscription becomes active/trialing, ensure Pro credits are granted
-            if status in ("active", "trialing"):
-                # Only grant credits if user has no monthly allowance yet
-                conn = get_conn()
-                cur = conn.cursor()
-                cur.execute(
-                    "SELECT monthly_allowance FROM users WHERE email=%s",
-                    (email,),
-                )
-                row = cur.fetchone()
-                cur.close()
-                conn.close()
-            
-                if not row or not row[0]:
-                    grant_pro_monthly_credits(email)
-
-    
         return JSONResponse({"received": True})
-    
 
-    if etype in ("invoice.payment_succeeded", "invoice.paid"):
-        sub_details = obj.get("subscription_details") or {}
+    # ------------------------------------------------------------
+    # 3) Monthly renewal: ONLY on subscription_cycle -> reset to 100
+    # ------------------------------------------------------------
+    if etype == "invoice.payment_succeeded":
+        invoice = obj
+
+        sub_details = invoice.get("subscription_details") or {}
         email = ((sub_details.get("metadata") or {}).get("email") or "").strip().lower()
         if not email:
-            email = ((obj.get("metadata") or {}).get("email") or "").strip().lower()
-    
-        billing_reason = obj.get("billing_reason")
-    
-        # IMPORTANT: only grant credits on monthly renewals
-        if email and billing_reason == "subscription_cycle":
-            grant_pro_monthly_credits(email)  # sets credits_remaining=100 cleanly
+            email = ((invoice.get("metadata") or {}).get("email") or "").strip().lower()
 
-    
+        billing_reason = invoice.get("billing_reason")
+
+        if email and billing_reason == "subscription_cycle":
+            grant_pro_monthly_credits(email)
+
         return JSONResponse({"received": True})
 
+    return JSONResponse({"received": True})
 
     
     return JSONResponse({"received": True})
