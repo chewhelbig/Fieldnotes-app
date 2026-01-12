@@ -1297,9 +1297,6 @@ def main():
     )
     ADMIN_CODE = os.getenv("FIELDNOTES_ADMIN_CODE", "").strip()
     
-    if "admin_ok" not in st.session_state:
-        st.session_state["admin_ok"] = False
-    
     # Default: NOT admin
     admin = False
     
@@ -1328,9 +1325,6 @@ def main():
     if (not email_ok) or (user_email not in ADMIN_EMAILS):
         st.session_state["admin_ok"] = False
         admin = False
-
-
-
     
     
     # ✅ Admin tools ONLY if admin is True
@@ -1343,14 +1337,12 @@ def main():
         ).strip().lower()
     
         if st.sidebar.button("Reset subscriber PIN"):
-            if pg_reset_app_pin(reset_email):
+            if not reset_email:
+                st.sidebar.error("Enter an email address first.")
+            elif pg_reset_app_pin(reset_email):
                 st.sidebar.success("PIN reset. User will be asked to set a new PIN.")
             else:
                 st.sidebar.warning("No user found with that email.")
-
-
-    
-    admin = bool(email_ok and (user_email in ADMIN_EMAILS) and st.session_state["admin_ok"])
 
     
     # 0) Opening app (no email)
