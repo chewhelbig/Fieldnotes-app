@@ -1394,10 +1394,12 @@ def main():
     
             # Only when invite code is correct do we create the user record (so verification can happen next)
             if TRIAL_INVITE_CODE and invite == TRIAL_INVITE_CODE:
-                pg_user, created = pg_get_or_create_user(user_email, grant_trial=False)
+                pg_user, created = pg_get_or_create_user(user_email)
+
             elif not TRIAL_INVITE_CODE:
                 # If you ever remove invite-only mode, allow account creation without code
-                pg_user, created = pg_get_or_create_user(user_email, grant_trial=False)
+                pg_user, created = pg_get_or_create_user(user_email)
+
             else:
                 pg_user = None
                 created = False
@@ -1489,7 +1491,8 @@ def main():
                     if ok:
                         pg_mark_email_verified(user_email)
     
-                        granted = pg_grant_trial_credits_once(user_email, trial_credits=7)
+                        granted = pg_grant_trial_credits_once(user_email)
+
                         if granted:
                             st.sidebar.success("Email verified — 7 free credits added 🎁")
                         else:
