@@ -1858,9 +1858,8 @@ def main():
         st.info("Enter your email in the sidebar to enable generation.")
     elif not access_ok:
         st.warning(
-            "Access is locked. "
-            "Enter the trial access password in the sidebar or subscribe to continue."
-        )
+            "Access is locked."
+            "Enter a valid trial access code (invite-only) or subscribe.")
     elif not subscriber_pin_ok:
         st.warning("Please enter your subscriber PIN in the sidebar to generate outputs.")
     elif (not is_subscribed) and (credits_remaining <= 0) and (not admin):
