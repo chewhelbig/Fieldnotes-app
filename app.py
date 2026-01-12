@@ -1845,10 +1845,14 @@ def main():
   # If you implemented subscriber PIN UI, it should set subscriber_pin_ok accordingly.
     # But even if not, the default above prevents NameError.
     
-    can_generate = access_ok and subscriber_pin_ok and (
-        admin or (credits_remaining > 0) or is_subscribed
-    )
+    # Subscriber PIN default logic (A4)
+    if admin or not is_subscribed:
+        subscriber_pin_ok = True
+    else:
+        subscriber_pin_ok = st.session_state.get("subscriber_pin_ok", False)
     
+    can_generate = access_ok and (admin or subscriber_pin_ok)
+
     # Helpful messages (optional)
     if not email_ok:
         st.info("Enter your email in the sidebar to enable generation.")
@@ -1863,7 +1867,15 @@ def main():
         st.warning("No credits remaining. Please subscribe to continue.")
     
    
-    subscriber_pin_ok = st.session_state.get("subscriber_pin_ok", True)
+    # Subscriber PIN gate default:
+    # - Admin: allowed
+    # - Non-subscriber: allowed
+    # - Subscriber (non-admin): BLOCKED until correct PIN entered
+    if admin or not is_subscribed:
+        subscriber_pin_ok = True
+    else:
+        subscriber_pin_ok = st.session_state.get("subscriber_pin_ok", False)
+
 
     # ===== Generate button (main area) =====
     if st.button("Generate structured output", disabled=(not can_generate) or st.session_state.get("is_generating", False)):
