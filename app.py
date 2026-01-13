@@ -1396,11 +1396,17 @@ def main():
     
             # Only when invite code is correct do we create the user record (so verification can happen next)
             if TRIAL_INVITE_CODE and invite == TRIAL_INVITE_CODE:
+                st.session_state["trial_invite_ok"] = True
                 pg_user, created = pg_get_or_create_user(user_email)
+                st.rerun()
 
+
+           
             elif not TRIAL_INVITE_CODE:
-                # If you ever remove invite-only mode, allow account creation without code
-                pg_user, created = pg_get_or_create_user(user_email)
+            st.session_state["trial_invite_ok"] = True
+            pg_user, created = pg_get_or_create_user(user_email)
+            st.rerun()
+
 
             else:
                 pg_user = None
