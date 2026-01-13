@@ -1441,30 +1441,34 @@ def main():
         # 1c / 1d / 1e / 1f messages for known emails
         # -------------------------
         elif existing_user is not None:
+            email_verified_at = existing_user[8] if len(existing_user) > 8 else None
+            trial_granted_at  = existing_user[9] if len(existing_user) > 9 else None
+            email_verified = bool(email_verified_at)
+            
+            trial_invite_ok = bool(st.session_state.get("trial_invite_ok"))
+            
             if is_subscribed:
-                # 1d subscriber
                 st.sidebar.success("Welcome back. Your subscription is live.")
+            
             elif credits_remaining > 0:
-                # 1c trial user
-                st.sidebar.info(
-                    f"You have **{credits_remaining}** credits remaining. "
-                    f"**Subscribe** for ongoing use (100 credits/month)."
-                )
+                st.sidebar.info(f"Welcome. You have **{credits_remaining}** free trial credits remaining.")
+            
+            elif trial_invite_ok and (not email_verified):
+                st.sidebar.info("Welcome. Please verify your email to activate your **7 free trial credits**.")
+            
+            elif trial_granted_at and credits_remaining <= 0:
+                st.sidebar.warning("Your free trial credits have been used. Please subscribe to continue.")
+            
             elif has_paid_history:
-                # 1e lapsed subscriber
-                st.sidebar.warning(
-                    "Welcome back. Your subscription is not active. "
-                    f"**Subscribe** to return."
-                )
+                st.sidebar.warning("Welcome back. Your subscription is not active. Subscribe to return.")
+            
             else:
-                # 1f inactive
                 st.sidebar.info(
                     "Welcome.\n\n"
-                    "To generate notes, please "
-                    f"**subscribe** "
-                    "or request a "
+                    "To generate notes, please **subscribe** or request a "
                     f"[**free trial of 7 credits here**]({trial_request_url})."
                 )
+
     
         # -------------------------
         # 1b) After trial access code is correct → show verify email box
