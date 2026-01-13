@@ -18,6 +18,16 @@ from datetime import datetime, timedelta, timezone
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
+import streamlit as st
+from PIL import Image
+
+icon = Image.open("favicon-32x32.png")
+
+st.set_page_config(
+    page_title="FieldNotes",
+    page_icon=icon,
+    layout="wide",
+)
 
 
 # ====== database ===========
