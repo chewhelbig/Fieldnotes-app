@@ -21,12 +21,13 @@ from sendgrid.helpers.mail import Mail
 
 from PIL import Image
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-icon_path = os.path.join(HERE, "favicon-32x32-v5.png")
+from PIL import Image
+import streamlit as st
 
-icon = Image.open(icon_path)
+icon = Image.open("favicon-32x32-v5.png")
 
 st.set_page_config(page_title="FieldNotes", page_icon=icon, layout="wide")
+
 
 
 # ====== database ===========
