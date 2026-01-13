@@ -145,18 +145,15 @@ def pg_grant_trial_credits_once(email: str) -> bool:
     if not email:
         return False
 
-    # ✅ Ensure the user row exists before updating
+    # Ensure the user row exists before updating (optional but fine)
     pg_get_or_create_user(email)
 
-    try:
-        
-        conn = get_pg_conn()
-        if conn is None:
-            return False
-        
-        cur = conn.cursor()
+    conn = get_pg_conn()
+    if conn is None:
+        return False
 
-        # Only grant once
+    try:
+        cur = conn.cursor()
         cur.execute(
             """
             UPDATE users
@@ -176,7 +173,6 @@ def pg_grant_trial_credits_once(email: str) -> bool:
 
     finally:
         conn.close()
-
 
 
 def pg_maybe_reset_monthly(email: str):
