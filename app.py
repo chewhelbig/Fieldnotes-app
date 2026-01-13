@@ -1399,9 +1399,9 @@ def main():
 
            
             elif not TRIAL_INVITE_CODE:
-            st.session_state["trial_invite_ok"] = True
-            pg_user, created = pg_get_or_create_user(user_email)
-            st.rerun()
+                st.session_state["trial_invite_ok"] = True
+                pg_user, created = pg_get_or_create_user(user_email)
+                st.rerun()
 
 
             else:
