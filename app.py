@@ -1624,6 +1624,7 @@ def main():
     # ========= Main content always renders =========
 
     # ========= Main content =================
+    st.image("apple-touch-icon.png", width=80)
     st.title("FieldNotes - Session Companion")
     st.write(
         "FieldNotes is a Gestalt-informed AI companion to help therapists turn a quick narrative into "
