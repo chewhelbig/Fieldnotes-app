@@ -1635,14 +1635,14 @@ def main():
     col1, col2 = st.columns([1, 8])
     
     with col1:
-        st.image(logo_path, width=60)
+        st.image(logo_path, width=50)
     
     with col2:
         st.markdown(
             """
             <div style="padding-top: 6px;">
                 <h2 style="margin-bottom: 0;">FieldNotes</h2>
-                <p style="margin-top: -6px; color: #6b7280;">
+                <p style="margin-top: -4px; color: #6b7280;">
                     Session Companion
                 </p>
             </div>
