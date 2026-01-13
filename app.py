@@ -275,7 +275,8 @@ def pg_get_user(email: str):
         cur = conn.cursor()
         cur.execute("""
             SELECT email, plan, credits_remaining, monthly_allowance, last_reset,
-                   subscription_status, stripe_customer_id, stripe_subscription_id
+                   subscription_status, stripe_customer_id, stripe_subscription_id,
+                   email_verified_at, trial_credits_granted_at
             FROM users WHERE email=%s
         """, (email,))
         row = cur.fetchone()
@@ -283,6 +284,7 @@ def pg_get_user(email: str):
         return row
     finally:
         conn.close()
+
 
 def pg_refresh_user(email: str):
     """
