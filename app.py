@@ -19,10 +19,8 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
 
-from PIL import Image
 
 from PIL import Image
-import streamlit as st
 
 icon = Image.open("favicon-32x32-v5.png")
 
