@@ -22,9 +22,13 @@ from sendgrid.helpers.mail import Mail
 
 from PIL import Image
 
-icon = Image.open("favicon-32x32-v5.png")
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+icon = Image.open(os.path.join(HERE, "favicon-32x32-v5.png"))
 st.set_page_config(page_title="FieldNotes", page_icon=icon, layout="wide")
+
+st.image(os.path.join(HERE, "apple-touch-icon-180x180-v5.png"), width=80)
 
 
 
@@ -1622,7 +1626,8 @@ def main():
     # ========= Main content always renders =========
 
     # ========= Main content =================
-    st.image("apple-touch-icon-v5.png", width=80)
+    st.image("apple-touch-icon-180x180-v5.png", width=80)
+
     st.title("FieldNotes - Session Companion")
     st.write(
         "FieldNotes is a Gestalt-informed AI companion to help therapists turn a quick narrative into "
