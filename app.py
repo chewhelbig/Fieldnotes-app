@@ -1629,26 +1629,8 @@ def main():
 
     # ========= Main content =================
     
-    HERE = os.path.dirname(os.path.abspath(__file__))
-    logo_path = os.path.join(HERE, "apple-touch-icon-180x180-v5.png")
-    
-    col1, col2 = st.columns([1, 8])
-    
-    with col1:
-        st.image(logo_path, width=50)
-    
-    with col2:
-        st.markdown(
-            """
-            <div style="padding-top: 6px;">
-                <h2 style="margin-bottom: 0;">FieldNotes</h2>
-                <p style="margin-top: -4px; color: #6b7280;">
-                    Session Companion
-                </p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+    st.image("apple-touch-icon-180x180-v5.png", width=80)
+    st.title("FieldNotes - Session Companion")
    
     st.write(
         "FieldNotes is a Gestalt-informed AI companion to help therapists turn a quick narrative into "
