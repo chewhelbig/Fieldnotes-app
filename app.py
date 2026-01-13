@@ -1407,7 +1407,7 @@ def main():
             else:
                 pg_user = None
                 created = False
-    
+
         else:
             # -------------------------
             # Existing user OR admin → load user directly
