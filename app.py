@@ -1390,23 +1390,30 @@ def main():
                 key="trial_invite_code",
             ).strip()
     
-            # Only when invite code is correct do we create the user record (so verification can happen next)
+           
+            # Only when invite code is correct do we create the user record
             if TRIAL_INVITE_CODE and invite == TRIAL_INVITE_CODE:
                 st.session_state["trial_invite_ok"] = True
                 pg_user, created = pg_get_or_create_user(user_email)
+            
+                # ✅ Grant trial credits immediately (idempotent / only once)
+                pg_grant_trial_credits_once(user_email)
+            
                 st.rerun()
-
-
-           
+            
             elif not TRIAL_INVITE_CODE:
+                # Invite-only mode disabled (optional)
                 st.session_state["trial_invite_ok"] = True
                 pg_user, created = pg_get_or_create_user(user_email)
+            
+                pg_grant_trial_credits_once(user_email)
+            
                 st.rerun()
-
-
+            
             else:
                 pg_user = None
                 created = False
+
 
         else:
             # -------------------------
@@ -1469,54 +1476,8 @@ def main():
         # -------------------------
         # 1b) After trial access code is correct → show verify email box
         #     (only for brand new users created via invite code)
-        # -------------------------
-        trial_invite_ok = bool(st.session_state.get("trial_invite_ok"))
-        
-        email_verified_at = pg_user[8] if pg_user and len(pg_user) > 8 else None
-        trial_granted_at  = pg_user[9] if pg_user and len(pg_user) > 9 else None
-        email_verified = bool(email_verified_at)
-        
-        # Show verification if invite is OK, user is not subscribed, and not verified yet
-        if (not admin) and email_ok and pg_user and (not is_subscribed) and trial_invite_ok and (not email_verified):
-            st.sidebar.markdown("### ✅ Verify email to activate your 7 credits")
-            st.sidebar.caption("Verification is required before trial credits are granted.")
-        
-            if st.sidebar.button("Send verification code", key="send_verify_code"):
-                code = f"{secrets.randbelow(10**6):06d}"
-                expires_at = _utcnow() + timedelta(minutes=OTP_TTL_MINUTES)
-                pg_set_verification_code(user_email, code, expires_at)
-        
-                try:
-                    send_verification_email(user_email, code)
-                    st.sidebar.success("Verification code sent. Check your email.")
-                except Exception as e:
-                    st.sidebar.error("Could not send verification email.")
-                    st.sidebar.exception(e)
-        
-            entered_code = st.sidebar.text_input(
-                "Enter 6-digit verification code",
-                key="verify_code_input",
-            ).strip()
-        
-            if st.sidebar.button("Verify email", key="btn_verify_email"):
-                ok, msg = pg_check_verification_code(user_email, entered_code)
-                if ok:
-                    pg_mark_email_verified(user_email)
-        
-                    # IMPORTANT: call with ONE arg (and ensure your function creates conn)
-                    granted = pg_grant_trial_credits_once(user_email)
-        
-                    if granted:
-                        st.sidebar.success("Email verified — 7 free credits added 🎁")
-                    else:
-                        st.sidebar.info("Email verified. Trial credits were already granted earlier.")
-        
-                    st.rerun()
-                else:
-                    st.sidebar.error(msg)
+        # (DISABLED: trial credits no longer require email verification)
 
-   
-    # -------------------------
     # -------------------------
     # Access gate (UPDATED)
     # -------------------------
