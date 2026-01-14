@@ -1373,6 +1373,14 @@ def main():
     else:
         # Lookup user
         existing_user = pg_get_user(user_email)
+        # Always define these to avoid NameError in any path
+        email_verified = False
+        email_verified_at = None
+        
+        if existing_user is not None and len(existing_user) > 8:
+            email_verified_at = existing_user[8]   # email_verified_at
+            email_verified = bool(email_verified_at)
+
     
         # Helper: lapsed subscriber detection (has Stripe ids but not active)
         has_paid_history = False
