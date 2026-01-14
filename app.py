@@ -1436,10 +1436,12 @@ def main():
             if existing_user is not None:
                 pg_user = existing_user
                 created = False
-    
+
         # -------------------------
         # If we have a user row, unpack latest status
         # -------------------------
+        credits_remaining = 0
+        subscription_status = "none"
         if pg_user:
             # Unpack tuple consistently
             credits_remaining = int(pg_user[2] or 0)
@@ -1453,39 +1455,83 @@ def main():
         # -------------------------
         if admin:
             st.sidebar.success("Admin view")
-    
+
         # -------------------------
         # 1c / 1d / 1e / 1f messages for known emails
         # -------------------------
         elif existing_user is not None:
-            email_verified_at = existing_user[8] if len(existing_user) > 8 else None
+           
             trial_granted_at  = existing_user[9] if len(existing_user) > 9 else None
-            email_verified = bool(email_verified_at)
-            
+           
+        
             trial_invite_ok = bool(st.session_state.get("trial_invite_ok"))
-            
+        
             if is_subscribed:
                 st.sidebar.success("Welcome back. Your subscription is live.")
-            
+        
             elif credits_remaining > 0:
-                st.sidebar.info(f"Welcome. You have **{credits_remaining}** free trial credits remaining.")
-            
+                if not email_verified:
+                    st.sidebar.warning(
+                        f"You have **{credits_remaining}** trial credits, but your email is not verified."
+                    )
+                else:
+                    st.sidebar.info(
+                        f"Welcome. You have **{credits_remaining}** free trial credits remaining."
+                    )
+        
             elif trial_invite_ok and (not email_verified):
                 st.sidebar.info("Welcome. Please verify your email to activate your **7 free trial credits**.")
-            
+        
             elif trial_granted_at and credits_remaining <= 0:
                 st.sidebar.warning("Your free trial credits have been used. Please subscribe to continue.")
-            
+        
             elif has_paid_history:
                 st.sidebar.warning("Welcome back. Your subscription is not active. Subscribe to return.")
-            
+        
             else:
                 st.sidebar.info(
                     "Welcome.\n\n"
                     "To generate notes, please **subscribe** or request a "
                     f"[**free trial of 7 credits here**]({trial_request_url})."
                 )
+        
+            # ✅ B goes here: NEW if (not elif), still inside existing_user block
+            if (
+                email_ok
+                and (not admin)
+                and (not is_subscribed)
+                and (credits_remaining > 0)
+                and (not email_verified)
+            ):
+                st.sidebar.markdown("### ✅ Verify your email (required for trial)")
+        
+                if st.sidebar.button("Send verification code", key="btn_send_verify_code"):
+                    try:
+                        code = f"{secrets.randbelow(1_000_000):06d}"
+                        expires_at = _utcnow() + timedelta(minutes=OTP_TTL_MINUTES)
+                        pg_set_verification_code(user_email, code, expires_at)
+                        send_verification_email(user_email, code)
+                        st.sidebar.success("Code sent. Check your inbox.")
+                    except Exception as e:
+                        st.sidebar.error("Could not send verification code. Please try again.")
+                        st.sidebar.caption(str(e))
+        
+                entered_code = st.sidebar.text_input(
+                    "Enter the 6-digit code",
+                    key="verify_code_input",
+                    placeholder="123456",
+                ).strip()
+        
+                if st.sidebar.button("Verify", key="btn_verify_code"):
+                    ok, msg = pg_check_verification_code(user_email, entered_code)
+                    if ok:
+                        pg_mark_email_verified(user_email)
+                        st.sidebar.success("Email verified. Trial access is now enabled.")
+                        st.rerun()
+                    else:
+                        st.sidebar.error(msg)
 
+    
     
         # -------------------------
         # 1b) After trial access code is correct → show verify email box
@@ -1502,9 +1548,16 @@ def main():
     
     # Only used to decide if "Generate" actions are allowed later.
     # (UI should still show even if access_ok is False.)
-    access_ok = bool(email_ok) and (admin or is_subscribed or (credits_remaining > 0))
+    # Email verified?
+    email_verified = False
+    if existing_user is not None and len(existing_user) > 8:
+        email_verified = bool(existing_user[8])  # email_verified_at
     
-        
+    # Trial users: must be verified before using trial credits
+    trial_can_generate = (credits_remaining > 0) and email_verified
+    
+    access_ok = bool(email_ok) and (admin or is_subscribed or trial_can_generate)
+
     
     # -------------------------
     # Subscribe / Credits UI (only after email is entered)
@@ -1684,10 +1737,14 @@ def main():
     
     # 4) Trial user with remaining credits
     elif credits_remaining > 0:
-        st.info(
-            f"You have **{credits_remaining}** credits remaining. "
-            "Subscribe for ongoing use (100 credits/month)."
-        )
+        if not email_verified:
+            st.sidebar.warning(
+                f"You have **{credits_remaining}** trial credits, but your email is not verified yet.\n\n"
+                "Please verify your email to use the app."
+            )
+        else:
+            st.sidebar.info(f"Welcome. You have **{credits_remaining}** free trial credits remaining.")
+
     
         # 👉 PLACE SUBSCRIBE BUTTON HERE
         if st.button("Subscribe here", key=f"subscribe_trial_{user_email}"):
@@ -1845,7 +1902,7 @@ def main():
     # -------------------------
     # Generation eligibility (must be defined for ALL paths)
     # -------------------------
-    is_subscribed = subscription_status in ("active", "trialing")
+   
     
     # Default from session_state (set by the Subscriber PIN UI)
     # Default: subscribers must enter PIN (fail-closed), others default OK
@@ -1892,21 +1949,28 @@ def main():
 
     # ===== Generate button (main area) =====
     if st.button("Generate structured output", disabled=(not can_generate) or st.session_state.get("is_generating", False)):
-
-        # Default: do not generate unless all checks pass
+    
         generate_now = False
     
         if not email_ok:
             st.warning("Please enter your email in the sidebar to continue.")
+    
         elif not access_ok:
             st.warning("Access is locked. Enter a valid trial access code (invite-only) or subscribe.")
-
+    
+        # ✅ ADD THIS HERE
+        elif (not is_subscribed) and (credits_remaining > 0) and (not email_verified) and (not admin):
+            st.warning("Please verify your email in the sidebar before using trial credits.")
+    
         elif (not is_subscribed) and credits_remaining <= 0:
             st.warning("Free trial ended. Please subscribe (USD 29/month).")
+    
         elif not narrative.strip():
             st.warning("Please enter a session narrative first.")
+    
         else:
             generate_now = True
+
     
         if generate_now:
             combined_narrative = narrative
