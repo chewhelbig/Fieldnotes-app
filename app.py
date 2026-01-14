@@ -1961,6 +1961,7 @@ def main():
         # ✅ ADD THIS HERE
         elif (not is_subscribed) and (credits_remaining > 0) and (not email_verified) and (not admin):
             st.warning("Please verify your email in the sidebar before using trial credits.")
+            st.stop()
     
         elif (not is_subscribed) and credits_remaining <= 0:
             st.warning("Free trial ended. Please subscribe (USD 29/month).")
