@@ -1606,21 +1606,34 @@ def main():
     
     st.sidebar.markdown("---")
     
-    # Usage + hosted mode info can stay
     st.sidebar.subheader("Usage")
+    
     with st.sidebar.expander("How credits are used"):
-        st.sidebar.markdown(
-            "- **1 credit = 1 clinical notes generation** (one click on “Generate structured output”).\n"
-            "- Clinical notes always cost **1 credit**.\n"
-            "- Adding *Therapist Reflection / Supervision View* uses **2 credits** (flat rate):\n"
-            "- Example: clinical notes + deep reflection = **3 credits total**.\n"
-            "- Regenerating always counts as a new AI generation.\n"
-            "- Credits measure AI usage, not therapy sessions."
+        st.markdown(
+            """
+    - **1 credit = 1 clinical notes generation** (one click on “Generate structured output”).
+    - Clinical notes always cost **1 credit**.
+    - Adding *Therapist Reflection / Supervision View* uses **2 credits** (flat rate).
+    - Example: clinical notes + deep reflection = **3 credits total**.
+    - Regenerating always counts as a new AI generation.
+    - Credits measure AI usage, not therapy sessions.
+            """
         )
-
+    st.sidebar.subheader("Manuals and resources")
+    
+    with st.sidebar.expander("Manuals and resources", expanded=False):
+        st.markdown(
+            """
+    - [Information page](https://psychotherapist.sg/fieldnotes)
+    - [Getting Started, Access, and Responsible Use](https://psychotherapist.sg/fieldnotes-v1-user-1)
+    - [Understanding the Language, Concepts, and Outputs](https://psychotherapist.sg/fieldnotes-v1-user-2)
+    - [Ethical Use Checklist](https://psychotherapist.sg/fieldnotes-user-5)
+            """
+        )
 
     
     st.sidebar.markdown("---")
+
     st.sidebar.subheader("Hosted mode: download-only")
     st.sidebar.caption("No notes are stored on this server. Use Download to save files to your device.")
 
