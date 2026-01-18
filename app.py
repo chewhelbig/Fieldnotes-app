@@ -68,7 +68,15 @@ def ensure_pg_schema():
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_expires_at TIMESTAMPTZ;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verify_attempts INT NOT NULL DEFAULT 0;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_credits_granted_at TIMESTAMPTZ;")
-
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS generation_requests (
+              email TEXT NOT NULL,
+              request_hash TEXT NOT NULL,
+              created_at TIMESTAMPTZ DEFAULT NOW(),
+              PRIMARY KEY (email, request_hash)
+            );
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_generation_requests_created_at ON generation_requests (created_at);")
         # Subscriber PIN (safe to run repeatedly)
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS app_pin TEXT;")
 
@@ -255,7 +263,41 @@ def pg_reset_app_pin(email: str) -> bool:
     finally:
         conn.close()
 
+def pg_try_register_generation_request(email: str, request_hash: str) -> bool:
+    """
+    Returns True if this request_hash is new for this email (allowed to proceed).
+    Returns False if it's a duplicate (another tab/refresh already submitted it).
+    """
+    conn = get_pg_conn()
+    if conn is None:
+        return True  # if no DB, don't block generation
 
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO generation_requests (email, request_hash)
+            VALUES (%s, %s)
+            ON CONFLICT DO NOTHING
+            RETURNING request_hash
+            """,
+            (email, request_hash),
+        )
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        return row is not None
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return True  # fail-open to avoid breaking core flow
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 # --- Admin access (Stage 2) ---
 def get_admin_emails() -> set[str]:
@@ -2010,6 +2052,13 @@ def main():
         
             # Lock UI to prevent double-click
             st.session_state["is_generating"] = True
+
+
+            # DB-level dedupe (protects against multi-tab / refresh / concurrent submissions)
+            ok = pg_try_register_generation_request(user_email, request_hash)
+            if not ok:
+                st.warning("That request was just submitted in another tab or moment ago.")
+                st.stop()
         
             # ----- NOTES: single OpenAI call -----
             try:
