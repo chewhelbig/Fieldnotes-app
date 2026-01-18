@@ -1685,7 +1685,7 @@ def main():
     with st.sidebar.expander("Manuals and resources", expanded=False):
         st.markdown(
             """
-    - [Information page](https://psychotherapist.sg/fieldnotes)
+    - [Information page](https://psychotherapist.sg/fieldnotes-learn-more)
     - [Getting Started, Access, and Responsible Use](https://psychotherapist.sg/fieldnotes-v1-user-1)
     - [Understanding the Language, Concepts, and Outputs](https://psychotherapist.sg/fieldnotes-v1-user-2)
     - [Ethical Use Checklist](https://psychotherapist.sg/fieldnotes-user-5)
