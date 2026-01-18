@@ -90,6 +90,44 @@ def ensure_billing_schema():
     cur.close()
     conn.close()
 
+def ensure_billing_pg_schema():
+    conn = get_pg_conn()
+    if conn is None:
+        return
+    try:
+        cur = conn.cursor()
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS webhook_log (
+              id SERIAL PRIMARY KEY,
+              event_id TEXT UNIQUE,
+              event_type TEXT,
+              email TEXT,
+              processed BOOLEAN DEFAULT FALSE,
+              error TEXT,
+              created_at TIMESTAMPTZ DEFAULT NOW(),
+              processed_at TIMESTAMPTZ
+            );
+        """)
+
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_webhook_log_processed_created
+            ON webhook_log (processed, created_at);
+        """)
+
+        conn.commit()
+        cur.close()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
 # --- Optional SendGrid dependency (do not crash app if missing) ---
 SENDGRID_AVAILABLE = True
 try:
