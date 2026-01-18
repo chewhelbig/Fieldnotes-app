@@ -79,7 +79,18 @@ def ensure_pg_schema():
         cur.execute("CREATE INDEX IF NOT EXISTS idx_generation_requests_created_at ON generation_requests (created_at);")
         # Subscriber PIN (safe to run repeatedly)
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS app_pin TEXT;")
-
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS generation_requests (
+              email TEXT NOT NULL,
+              request_hash TEXT NOT NULL,
+              created_at TIMESTAMPTZ DEFAULT NOW(),
+              PRIMARY KEY (email, request_hash)
+            );
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_generation_requests_created_at
+            ON generation_requests (created_at);
+        """)
         conn.commit()
         cur.close()
     finally:
