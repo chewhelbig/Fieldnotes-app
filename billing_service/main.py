@@ -9,7 +9,7 @@ import logging
 from psycopg2 import errors as pg_errors
 
 
-app = FastAPI()
+
 
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
@@ -127,6 +127,91 @@ def ensure_billing_pg_schema():
             conn.close()
         except Exception:
             pass
+
+
+def pg_webhook_log_insert(event_id: str, event_type: str, email: str | None):
+    conn = get_pg_conn()
+    if conn is None:
+        return
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO webhook_log (event_id, event_type, email, processed)
+            VALUES (%s, %s, %s, FALSE)
+            ON CONFLICT (event_id) DO NOTHING
+            """,
+            (event_id, event_type, email),
+        )
+        conn.commit()
+        cur.close()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def pg_webhook_log_mark_processed(event_id: str):
+    conn = get_pg_conn()
+    if conn is None:
+        return
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE webhook_log
+            SET processed=TRUE, processed_at=NOW(), error=NULL
+            WHERE event_id=%s
+            """,
+            (event_id,),
+        )
+        conn.commit()
+        cur.close()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def pg_webhook_log_mark_error(event_id: str, err: str):
+    conn = get_pg_conn()
+    if conn is None:
+        return
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE webhook_log
+            SET error=%s
+            WHERE event_id=%s
+            """,
+            (err[:1000], event_id),
+        )
+        conn.commit()
+        cur.close()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
 
 # --- Optional SendGrid dependency (do not crash app if missing) ---
 SENDGRID_AVAILABLE = True
@@ -289,7 +374,11 @@ def add_credits(email: str, amount: int):
     cur.close()
     conn.close()
 
+app = FastAPI()
 
+@app.on_event("startup")
+def on_startup():
+    ensure_billing_pg_schema()
 
 @app.get("/health")
 def health():
@@ -424,62 +513,71 @@ async def webhook(request: Request):
     etype = event["type"]
     obj = event["data"]["object"]
 
-    # ------------------------------------------------------------
-    # 1) Subscription started (Checkout)
-    # ------------------------------------------------------------
-    if etype == "checkout.session.completed":
-        session = obj
+    event_id = event["id"]
+    email = None  # will be filled if we can extract it
 
-        email = (
-            (session.get("customer_details") or {}).get("email")
-            or session.get("customer_email")
-            or ""
-        ).strip().lower()
 
-        if email:
-            upsert_user(email)
-
-            customer_id = session.get("customer")
-            sub_id = session.get("subscription")  # may exist for subscription checkout
-
-            # Save Stripe IDs (best-effort)
-            if customer_id or sub_id:
-                conn = None
-                cur = None
-                try:
-                    conn = get_conn()
-                    cur = conn.cursor()
-
-                    if customer_id and sub_id:
-                        cur.execute(
-                            "UPDATE users SET stripe_customer_id=%s, stripe_subscription_id=%s WHERE email=%s",
-                            (customer_id, sub_id, email),
-                        )
-                    elif customer_id:
-                        cur.execute(
-                            "UPDATE users SET stripe_customer_id=%s WHERE email=%s",
-                            (customer_id, email),
-                        )
-                    else:
-                        cur.execute(
-                            "UPDATE users SET stripe_subscription_id=%s WHERE email=%s",
-                            (sub_id, email),
-                        )
-
-                    conn.commit()
-                except Exception:
-                    pass
-                finally:
-                    if cur:
-                        try:
-                            cur.close()
-                        except Exception:
-                            pass
-                    if conn:
-                        try:
-                            conn.close()
-                        except Exception:
-                            pass
+    try:
+        pg_webhook_log_insert(event_id, etype, email)
+        # ------------------------------------------------------------
+        # 1) Subscription started (Checkout)
+        # ------------------------------------------------------------
+        
+        if etype == "checkout.session.completed":
+            session = obj
+    
+            email = (
+                (session.get("customer_details") or {}).get("email")
+                or session.get("customer_email")
+                or ""
+            ).strip().lower()
+    
+        
+    
+            if email:
+                upsert_user(email)
+    
+                customer_id = session.get("customer")
+                sub_id = session.get("subscription")  # may exist for subscription checkout
+    
+                # Save Stripe IDs (best-effort)
+                if customer_id or sub_id:
+                    conn = None
+                    cur = None
+                    try:
+                        conn = get_conn()
+                        cur = conn.cursor()
+    
+                        if customer_id and sub_id:
+                            cur.execute(
+                                "UPDATE users SET stripe_customer_id=%s, stripe_subscription_id=%s WHERE email=%s",
+                                (customer_id, sub_id, email),
+                            )
+                        elif customer_id:
+                            cur.execute(
+                                "UPDATE users SET stripe_customer_id=%s WHERE email=%s",
+                                (customer_id, email),
+                            )
+                        else:
+                            cur.execute(
+                                "UPDATE users SET stripe_subscription_id=%s WHERE email=%s",
+                                (sub_id, email),
+                            )
+    
+                        conn.commit()
+                    except Exception:
+                        pass
+                    finally:
+                        if cur:
+                            try:
+                                cur.close()
+                            except Exception:
+                                pass
+                        if conn:
+                            try:
+                                conn.close()
+                            except Exception:
+                                pass
 
             # ✅ Start subscription credits: set to 100 (no rollover)
             grant_pro_monthly_credits(email)
