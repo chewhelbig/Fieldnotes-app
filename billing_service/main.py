@@ -514,40 +514,37 @@ async def webhook(request: Request):
     obj = event["data"]["object"]
 
     event_id = event["id"]
-    email = None  # will be filled if we can extract it
-
+    email = None
 
     try:
+        # Log receipt (idempotent)
         pg_webhook_log_insert(event_id, etype, email)
+
         # ------------------------------------------------------------
         # 1) Subscription started (Checkout)
         # ------------------------------------------------------------
-        
         if etype == "checkout.session.completed":
             session = obj
-    
+
             email = (
                 (session.get("customer_details") or {}).get("email")
                 or session.get("customer_email")
                 or ""
             ).strip().lower()
-    
-        
-    
+
             if email:
                 upsert_user(email)
-    
+
                 customer_id = session.get("customer")
-                sub_id = session.get("subscription")  # may exist for subscription checkout
-    
-                # Save Stripe IDs (best-effort)
+                sub_id = session.get("subscription")
+
                 if customer_id or sub_id:
                     conn = None
                     cur = None
                     try:
                         conn = get_conn()
                         cur = conn.cursor()
-    
+
                         if customer_id and sub_id:
                             cur.execute(
                                 "UPDATE users SET stripe_customer_id=%s, stripe_subscription_id=%s WHERE email=%s",
@@ -563,113 +560,50 @@ async def webhook(request: Request):
                                 "UPDATE users SET stripe_subscription_id=%s WHERE email=%s",
                                 (sub_id, email),
                             )
-    
+
                         conn.commit()
-                    except Exception:
-                        pass
                     finally:
                         if cur:
-                            try:
-                                cur.close()
-                            except Exception:
-                                pass
+                            cur.close()
                         if conn:
-                            try:
-                                conn.close()
-                            except Exception:
-                                pass
+                            conn.close()
 
-            # ✅ Start subscription credits: set to 100 (no rollover)
-            grant_pro_monthly_credits(email)
+                grant_pro_monthly_credits(email)
 
-            # Optional: write email into Stripe Customer metadata
-            if customer_id:
-                try:
-                    stripe.Customer.modify(customer_id, metadata={"email": email})
-                except Exception as e:
-                    logger.warning("Could not set Stripe customer metadata: %s", e)
+        # ------------------------------------------------------------
+        # 2) Subscription status updates (NO credit reset)
+        # ------------------------------------------------------------
+        elif etype.startswith("customer.subscription."):
+            email = ((obj.get("metadata") or {}).get("email") or "").strip().lower()
+            if email:
+                update_user_subscription(email, obj)
 
-            # Send onboarding email (best-effort)
-            conn = None
-            cur = None
-            try:
-                conn = get_conn()
-                cur = conn.cursor()
+        # ------------------------------------------------------------
+        # 3) Monthly renewal (ONLY subscription_cycle)
+        # ------------------------------------------------------------
+        elif etype == "invoice.payment_succeeded":
+            invoice = obj
+            billing_reason = invoice.get("billing_reason")
 
-                was_trial_user = False
-                stripe_customer_id = customer_id
+            sub_details = invoice.get("subscription_details") or {}
+            email = (
+                (sub_details.get("metadata") or {}).get("email")
+                or (invoice.get("metadata") or {}).get("email")
+                or ""
+            ).strip().lower()
 
-                try:
-                    cur.execute(
-                        """
-                        SELECT trial_credits_granted_at, stripe_customer_id
-                        FROM users
-                        WHERE email = %s
-                        """,
-                        (email,),
-                    )
-                    row = cur.fetchone()
-                    was_trial_user = bool(row and row[0])
-                    stripe_customer_id = (row[1] if row else None) or stripe_customer_id
+            if email and billing_reason == "subscription_cycle":
+                grant_pro_monthly_credits(email)
 
-                except pg_errors.UndefinedColumn:
-                    cur.execute(
-                        "SELECT stripe_customer_id FROM users WHERE email=%s",
-                        (email,),
-                    )
-                    row = cur.fetchone()
-                    stripe_customer_id = (row[0] if row else None) or stripe_customer_id
-                    was_trial_user = False
+        # ---- other etype blocks go here ----
 
-                portal_link = create_billing_portal_link(stripe_customer_id)
-                subject, text = email_subscription_started_body(
-                    trial_user=was_trial_user,
-                    portal_link=portal_link,
-                )
-                send_onboarding_email(email, subject=subject, text=text)
-
-            except Exception:
-                pass
-            finally:
-                if cur:
-                    try:
-                        cur.close()
-                    except Exception:
-                        pass
-                if conn:
-                    try:
-                        conn.close()
-                    except Exception:
-                        pass
-
+        pg_webhook_log_mark_processed(event_id)
         return JSONResponse({"received": True})
 
-    # ------------------------------------------------------------
-    # 2) Subscription status updates (record only, do NOT reset credits)
-    # ------------------------------------------------------------
-    if etype.startswith("customer.subscription."):
-        email = ((obj.get("metadata") or {}).get("email") or "").strip().lower()
-        if email:
-            update_user_subscription(email, obj)
-        return JSONResponse({"received": True})
+    except Exception as e:
+        pg_webhook_log_mark_error(event_id, str(e))
+        raise
 
-    # ------------------------------------------------------------
-    # 3) Monthly renewal: ONLY on subscription_cycle -> reset to 100
-    # ------------------------------------------------------------
-    if etype == "invoice.payment_succeeded":
-        invoice = obj
-
-        sub_details = invoice.get("subscription_details") or {}
-        email = ((sub_details.get("metadata") or {}).get("email") or "").strip().lower()
-        if not email:
-            email = ((invoice.get("metadata") or {}).get("email") or "").strip().lower()
-
-        billing_reason = invoice.get("billing_reason")
-
-        if email and billing_reason == "subscription_cycle":
-            grant_pro_monthly_credits(email)
-
-        return JSONResponse({"received": True})
 
     return JSONResponse({"received": True})
 
