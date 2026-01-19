@@ -22,6 +22,9 @@ def get_conn():
     if not url:
         raise RuntimeError("DATABASE_URL is missing")
     return psycopg2.connect(url, sslmode="require")
+def get_pg_conn():
+    return get_conn()
+
 
 logger = logging.getLogger("billing_service")
 logging.basicConfig(level=logging.INFO)
@@ -91,7 +94,7 @@ def ensure_billing_schema():
     conn.close()
 
 def ensure_billing_pg_schema():
-    conn = get_pg_conn()
+    conn = get_conn()
     if conn is None:
         return
     try:
@@ -130,7 +133,7 @@ def ensure_billing_pg_schema():
 
 
 def pg_webhook_log_insert(event_id: str, event_type: str, email: str | None):
-    conn = get_pg_conn()
+    conn = get_conn()
     if conn is None:
         return
     try:
@@ -158,7 +161,7 @@ def pg_webhook_log_insert(event_id: str, event_type: str, email: str | None):
 
 
 def pg_webhook_log_mark_processed(event_id: str):
-    conn = get_pg_conn()
+    conn = get_conn()
     if conn is None:
         return
     try:
@@ -186,7 +189,7 @@ def pg_webhook_log_mark_processed(event_id: str):
 
 
 def pg_webhook_log_mark_error(event_id: str, err: str):
-    conn = get_pg_conn()
+    conn = get_conn()
     if conn is None:
         return
     try:
@@ -379,6 +382,8 @@ app = FastAPI()
 @app.on_event("startup")
 def on_startup():
     ensure_billing_pg_schema()
+    ensure_users_schema_minimal()
+
 
 @app.get("/health")
 def health():
@@ -605,7 +610,3 @@ async def webhook(request: Request):
         raise
 
 
-    return JSONResponse({"received": True})
-
-    
-    return JSONResponse({"received": True})
